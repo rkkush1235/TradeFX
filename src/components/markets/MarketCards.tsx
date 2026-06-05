@@ -85,27 +85,20 @@ export function MarketCards({ snapshot }: { snapshot: MarketSnapshot }) {
   const [orderError, setOrderError] = useState<string | null>(null);
   const [confirmingOrder, setConfirmingOrder] = useState(false);
 
-  const activeTrade = useMemo(
-    () => trades.find((trade) => trade.status === "open") ?? null,
-    [trades],
-  );
-  const activePositionState = activeTrade
-    ? activeTrade.type === "buy"
-      ? "BUY_ACTIVE"
-      : "SELL_ACTIVE"
-    : "NO_POSITION";
+  // Support multiple open positions per asset (BUY and SELL)
+  const openTradesByAsset = useMemo(() => {
+    const map: Record<string, Trade[]> = {};
+    for (const trade of trades) {
+      if (trade.status === "open") {
+        if (!map[trade.asset]) map[trade.asset] = [];
+        map[trade.asset].push(trade);
+      }
+    }
+    return map;
+  }, [trades]);
 
-  const activeLivePrice = activeTrade
-    ? safeNumber(snapshot.prices[activeTrade.asset]?.priceUsd || activeTrade.currentPrice)
-    : 0;
-  const activePnl = activeTrade
-    ? calculatePnL({
-      entryPrice: safeNumber(activeTrade.entryPrice),
-      currentPrice: activeLivePrice > 0 ? activeLivePrice : safeNumber(activeTrade.currentPrice),
-      quantity: safeNumber(activeTrade.quantity, 0, 1e6),
-      side: activeTrade.type,
-    })
-    : 0;
+  // For the selected asset in the modal, get all open trades (BUY/SELL)
+  const selectedAssetOpenTrades = draftOrder ? openTradesByAsset[draftOrder.symbol] || [] : [];
 
   const quantity = safeNumber(quantityInput, 0, 1e6);
 
@@ -122,15 +115,9 @@ export function MarketCards({ snapshot }: { snapshot: MarketSnapshot }) {
   const maxTradePower = safeNumber(walletBalance * effectiveLeverage, 0, 1e15);
   const maxTradeQtyLimit = safeNumber(draftPrice > 0 ? maxTradePower / draftPrice : 0, 0, 1e12);
 
-  const willCloseOpposite = Boolean(
-    draftOrder && activeTrade &&
-    ((activeTrade.type === "buy" && draftOrder.side === "sell") ||
-      (activeTrade.type === "sell" && draftOrder.side === "buy")),
-  );
-
-  const sameDirectionActive = Boolean(
-    draftOrder && activeTrade && activeTrade.type === draftOrder.side,
-  );
+  // No forced close, allow both BUY and SELL positions
+  const willCloseOpposite = false;
+  const sameDirectionActive = false;
 
   const tvSymbol = useMemo(() => {
     if (!draftOrder) return "";
@@ -230,11 +217,20 @@ export function MarketCards({ snapshot }: { snapshot: MarketSnapshot }) {
             transition={{ delay: idx * 0.03 }}
           >
             <p className="text-xs text-zinc-400">{item.symbol}</p>
-            {activeTrade?.asset === item.symbol ? (
-              <p className={`mt-1 text-[11px] ${activeTrade.type === "buy" ? "text-emerald-400" : "text-red-400"}`}>
-                Active {activeTrade.type.toUpperCase()} • P/L {formatCurrency(activePnl)}
-              </p>
-            ) : null}
+            {(openTradesByAsset[item.symbol] || []).map((trade) => {
+              const livePrice = safeNumber(snapshot.prices[trade.asset]?.priceUsd || trade.currentPrice);
+              const pnl = calculatePnL({
+                entryPrice: safeNumber(trade.entryPrice),
+                currentPrice: livePrice > 0 ? livePrice : safeNumber(trade.currentPrice),
+                quantity: safeNumber(trade.quantity, 0, 1e6),
+                side: trade.type,
+              });
+              return (
+                <p key={trade.id} className={`mt-1 text-[11px] ${trade.type === "buy" ? "text-emerald-400" : "text-red-400"}`}>
+                  Active {trade.type.toUpperCase()} • Qty {safeNumber(trade.quantity, 0, 1e6).toFixed(6)} • P/L {formatCurrency(pnl)}
+                </p>
+              );
+            })}
             <h3 className="mt-2 text-lg font-semibold">{formatCurrency(safeNumber(item.priceUsd))}</h3>
             <p className={`mt-1 text-xs ${up ? "badge-up" : "badge-down"}`}>
               {formatPercent(safeNumber(item.change24h))}
@@ -296,6 +292,28 @@ export function MarketCards({ snapshot }: { snapshot: MarketSnapshot }) {
                 loading="lazy"
               />
             </div>
+
+            {/* Show all open positions for this asset */}
+            {selectedAssetOpenTrades.length > 0 && (
+              <div className="rounded-lg border border-zinc-700 bg-zinc-900/60 p-2 text-[11px] text-zinc-300 space-y-1">
+                <div className="font-semibold text-xs mb-1">Open Positions</div>
+                {selectedAssetOpenTrades.map((trade) => {
+                  const livePrice = safeNumber(snapshot.prices[trade.asset]?.priceUsd || trade.currentPrice);
+                  const pnl = calculatePnL({
+                    entryPrice: safeNumber(trade.entryPrice),
+                    currentPrice: livePrice > 0 ? livePrice : safeNumber(trade.currentPrice),
+                    quantity: safeNumber(trade.quantity, 0, 1e6),
+                    side: trade.type,
+                  });
+                  return (
+                    <div key={trade.id} className="flex items-center justify-between">
+                      <span>{trade.type.toUpperCase()} • Qty {safeNumber(trade.quantity, 0, 1e6).toFixed(6)}</span>
+                      <span className={pnl >= 0 ? "text-emerald-400" : "text-red-400"}>P/L {formatCurrency(pnl)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             <div className="grid gap-2 sm:grid-cols-3">
               <p className="rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-300">
@@ -372,7 +390,7 @@ export function MarketCards({ snapshot }: { snapshot: MarketSnapshot }) {
 
             <button
               type="button"
-              disabled={confirmingOrder || draftMarketStatus?.isOpen === false || sameDirectionActive}
+              disabled={confirmingOrder || draftMarketStatus?.isOpen === false}
               onClick={submitOrder}
               className={`w-full rounded-lg px-4 py-2 text-sm font-semibold ${
                 draftOrder.side === "buy"
@@ -384,11 +402,9 @@ export function MarketCards({ snapshot }: { snapshot: MarketSnapshot }) {
                 ? "Market Closed"
                 : confirmingOrder
                 ? "Processing..."
-                : willCloseOpposite
-                  ? "Close Active Position"
-                  : draftOrder.side === "buy"
-                    ? "Open Buy Position"
-                    : "Open Sell Position"}
+                : draftOrder.side === "buy"
+                  ? "Open Buy Position"
+                  : "Open Sell Position"}
             </button>
 
             {draftMarketStatus && !draftMarketStatus.isOpen ? (
