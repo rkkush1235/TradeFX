@@ -237,6 +237,7 @@ export default function Home() {
             <p>Press Enquiries: media.queries@tradefx.com</p>
             <p>Regulatory Issues/Enforcement: legal@tradefx.com</p>
             <p>For Grievance Redressal, contact support@tradefx.com</p>
+            <p>Address: 56, Jeevan Bima Nagar, Old Airport Rd, Bengaluru, Karnataka</p>
           </div>
 
           <div className="mt-8 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-500">
