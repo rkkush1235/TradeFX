@@ -5,13 +5,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
 import { AdminRoute } from "@/components/guards/AdminRoute";
 import { useAuth } from "@/hooks/useAuth";
-import {
-  useAdjustWallet,
-  useDeposits,
-  useReviewDeposit,
-  useReviewWithdrawal,
-  useWithdrawals,
-} from "@/hooks/useWalletRequests";
+import { useAdjustWallet, useDeposits, useWithdrawals } from "@/hooks/useWalletRequests";
 import { useAdminUpdateTradeEntryPrice, useAllTrades } from "@/hooks/useTrading";
 import { closeTrade } from "@/services/tradingService";
 import { useActivityLogs, useAnalytics, useUsers } from "@/hooks/useAdmin";
@@ -26,8 +20,6 @@ export default function AdminPage() {
   const deposits = useDeposits();
   const withdrawals = useWithdrawals();
   const trades = useAllTrades();
-  const reviewDeposit = useReviewDeposit();
-  const reviewWithdrawal = useReviewWithdrawal();
   const adjustWallet = useAdjustWallet();
   const updateTradeEntryPrice = useAdminUpdateTradeEntryPrice();
   const snapshot = useMarketData();
@@ -42,11 +34,6 @@ export default function AdminPage() {
   const pendingDeposits = deposits.filter((item) => item.status === "pending").length;
   const pendingWithdrawals = withdrawals.filter((item) => item.status === "pending").length;
   const openTrades = trades.filter((item) => item.status === "open").length;
-  const kycUsers = users.filter(
-    (user) =>
-      !!(user.aadhaarFrontBase64 || user.aadhaarBackBase64 || user.aadhaarFrontUrl || user.aadhaarBackUrl),
-  );
-
   return (
     <AdminRoute>
       <AppShell title="Admin Panel">
@@ -58,44 +45,26 @@ export default function AdminPage() {
           <Link href="/admin/withdrawals" className="glass p-4 text-sm hover:bg-zinc-900/40">Withdrawal Approvals</Link>
         </section>
 
-        <section className="glass p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-medium">Uploaded KYC Documents</h3>
-            <Link href="/admin/kyc" className="text-xs text-emerald-400">Open Full KYC Review</Link>
+        <section className="grid gap-3 md:grid-cols-2">
+          <div className="glass p-4">
+            <h3 className="text-sm font-medium">Account Verification</h3>
+            <p className="mt-1 text-xs text-zinc-400">KYC reviews are handled only on the dedicated account verification screen.</p>
+            <Link href="/admin/kyc" className="mt-3 inline-flex rounded-md bg-emerald-500 px-3 py-2 text-xs font-semibold text-zinc-900">
+              Open KYC Verification
+            </Link>
           </div>
-          {kycUsers.length ? (
-            <div className="grid gap-3 md:grid-cols-3">
-              {kycUsers.slice(0, 6).map((user) => {
-                const frontSrc = user.aadhaarFrontBase64 || user.aadhaarFrontUrl || "";
-                const backSrc = user.aadhaarBackBase64 || user.aadhaarBackUrl || "";
-                return (
-                  <div key={user.uid} className="rounded-lg border border-zinc-700/80 p-3 text-xs">
-                    <p className="mb-2 font-medium">{user.displayName || user.email}</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded border border-zinc-700 p-1">
-                        <p className="mb-1 text-[10px] text-zinc-400">Front</p>
-                        {frontSrc ? (
-                          <img src={frontSrc} alt="Aadhaar front" className="h-20 w-full rounded object-cover" />
-                        ) : (
-                          <p className="text-[10px] text-zinc-500">Missing</p>
-                        )}
-                      </div>
-                      <div className="rounded border border-zinc-700 p-1">
-                        <p className="mb-1 text-[10px] text-zinc-400">Back</p>
-                        {backSrc ? (
-                          <img src={backSrc} alt="Aadhaar back" className="h-20 w-full rounded object-cover" />
-                        ) : (
-                          <p className="text-[10px] text-zinc-500">Missing</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+          <div className="glass p-4">
+            <h3 className="text-sm font-medium">Payment Verification</h3>
+            <p className="mt-1 text-xs text-zinc-400">Deposit and withdrawal approvals are managed only on payment verification screens.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link href="/admin/deposits" className="inline-flex rounded-md bg-emerald-500 px-3 py-2 text-xs font-semibold text-zinc-900">
+                Open Deposit Queue
+              </Link>
+              <Link href="/admin/withdrawals" className="inline-flex rounded-md bg-zinc-800 px-3 py-2 text-xs font-semibold text-zinc-200">
+                Open Withdrawal Queue
+              </Link>
             </div>
-          ) : (
-            <p className="text-xs text-zinc-500">No uploaded KYC documents found yet.</p>
-          )}
+          </div>
         </section>
 
         <section className="grid gap-3 md:grid-cols-4">
@@ -176,88 +145,6 @@ export default function AdminPage() {
             >
               Update Wallet
             </button>
-          </div>
-        </section>
-
-        <section className="glass p-4">
-          <h3 className="mb-3 text-sm font-medium">Approve Deposits</h3>
-          <div className="space-y-2">
-            {deposits.map((item) => (
-              <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-700/80 p-3 text-sm">
-                <span>{item.userId.slice(0, 8)} • {formatCurrency(item.amount)} • {item.status}</span>
-                <div className="flex gap-2">
-                  <button
-                    className="rounded-md bg-emerald-500 px-2 py-1 text-xs text-zinc-900"
-                    onClick={() =>
-                      reviewDeposit.mutate({
-                        requestId: item.id,
-                        userId: item.userId,
-                        amount: item.amount,
-                        adminId: appUser?.uid ?? "admin",
-                        status: "approved",
-                      })
-                    }
-                  >
-                    Approve
-                  </button>
-                  <button
-                    className="rounded-md bg-red-500 px-2 py-1 text-xs"
-                    onClick={() =>
-                      reviewDeposit.mutate({
-                        requestId: item.id,
-                        userId: item.userId,
-                        amount: item.amount,
-                        adminId: appUser?.uid ?? "admin",
-                        status: "rejected",
-                      })
-                    }
-                  >
-                    Reject
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="glass p-4">
-          <h3 className="mb-3 text-sm font-medium">Approve Withdrawals</h3>
-          <div className="space-y-2">
-            {withdrawals.map((item) => (
-              <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-700/80 p-3 text-sm">
-                <span>{item.userId.slice(0, 8)} • {formatCurrency(item.amount)} • {item.status}</span>
-                <div className="flex gap-2">
-                  <button
-                    className="rounded-md bg-emerald-500 px-2 py-1 text-xs text-zinc-900"
-                    onClick={() =>
-                      reviewWithdrawal.mutate({
-                        requestId: item.id,
-                        userId: item.userId,
-                        amount: item.amount,
-                        adminId: appUser?.uid ?? "admin",
-                        status: "approved",
-                      })
-                    }
-                  >
-                    Approve
-                  </button>
-                  <button
-                    className="rounded-md bg-red-500 px-2 py-1 text-xs"
-                    onClick={() =>
-                      reviewWithdrawal.mutate({
-                        requestId: item.id,
-                        userId: item.userId,
-                        amount: item.amount,
-                        adminId: appUser?.uid ?? "admin",
-                        status: "rejected",
-                      })
-                    }
-                  >
-                    Reject
-                  </button>
-                </div>
-              </div>
-            ))}
           </div>
         </section>
 

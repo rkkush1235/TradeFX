@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { useMemo, useState } from "react";
 import { MarketSnapshot } from "@/types";
+import type { Trade } from "@/types";
 import { formatCurrency, formatPercent, safeNumber } from "@/utils/format";
 import { useAppStore } from "@/store/useAppStore";
 import { useAuth } from "@/hooks/useAuth";
@@ -99,6 +100,24 @@ export function MarketCards({ snapshot }: { snapshot: MarketSnapshot }) {
 
   // For the selected asset in the modal, get all open trades (BUY/SELL)
   const selectedAssetOpenTrades = draftOrder ? openTradesByAsset[draftOrder.symbol] || [] : [];
+
+  const activeTrade = selectedAssetOpenTrades[0] ?? null;
+  const activePositionState =
+    selectedAssetOpenTrades.length === 0
+      ? "None"
+      : selectedAssetOpenTrades.map((trade) => trade.type.toUpperCase()).join(" + ");
+  const activePnl = selectedAssetOpenTrades.reduce((sum, trade) => {
+    const livePrice = safeNumber(snapshot.prices[trade.asset]?.priceUsd || trade.currentPrice);
+    return (
+      sum +
+      calculatePnL({
+        entryPrice: safeNumber(trade.entryPrice),
+        currentPrice: livePrice > 0 ? livePrice : safeNumber(trade.currentPrice),
+        quantity: safeNumber(trade.quantity, 0, 1e6),
+        side: trade.type,
+      })
+    );
+  }, 0);
 
   const quantity = safeNumber(quantityInput, 0, 1e6);
 
@@ -217,20 +236,6 @@ export function MarketCards({ snapshot }: { snapshot: MarketSnapshot }) {
             transition={{ delay: idx * 0.03 }}
           >
             <p className="text-xs text-zinc-400">{item.symbol}</p>
-            {(openTradesByAsset[item.symbol] || []).map((trade) => {
-              const livePrice = safeNumber(snapshot.prices[trade.asset]?.priceUsd || trade.currentPrice);
-              const pnl = calculatePnL({
-                entryPrice: safeNumber(trade.entryPrice),
-                currentPrice: livePrice > 0 ? livePrice : safeNumber(trade.currentPrice),
-                quantity: safeNumber(trade.quantity, 0, 1e6),
-                side: trade.type,
-              });
-              return (
-                <p key={trade.id} className={`mt-1 text-[11px] ${trade.type === "buy" ? "text-emerald-400" : "text-red-400"}`}>
-                  Active {trade.type.toUpperCase()} • Qty {safeNumber(trade.quantity, 0, 1e6).toFixed(6)} • P/L {formatCurrency(pnl)}
-                </p>
-              );
-            })}
             <h3 className="mt-2 text-lg font-semibold">{formatCurrency(safeNumber(item.priceUsd))}</h3>
             <p className={`mt-1 text-xs ${up ? "badge-up" : "badge-down"}`}>
               {formatPercent(safeNumber(item.change24h))}
