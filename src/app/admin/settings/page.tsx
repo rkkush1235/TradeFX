@@ -14,6 +14,8 @@ export default function AdminSettingsPage() {
             <li>NEXT_PUBLIC_EMAILJS_SERVICE_ID</li>
             <li>NEXT_PUBLIC_EMAILJS_TEMPLATE_ID</li>
             <li>NEXT_PUBLIC_EMAILJS_PUBLIC_KEY</li>
+            <li>NEXT_PUBLIC_EMAILJS_FROM_NAME</li>
+            <li>NEXT_PUBLIC_EMAILJS_REPLY_TO</li>
             <li>NEXT_PUBLIC_APP_URL</li>
           </ul>
           <p className="text-xs text-zinc-500">Admin role assignment remains manual via Firestore users document.</p>

@@ -9,6 +9,7 @@ import { useUpdateUserStatus, useUsers } from "@/hooks/useAdmin";
 import { UserStatus } from "@/types";
 
 type ToastState = { type: "success" | "error"; message: string } | null;
+type PreviewImage = { src: string; title: string } | null;
 
 export default function AdminKycPage() {
   const router = useRouter();
@@ -19,6 +20,7 @@ export default function AdminKycPage() {
   const [statusFilter, setStatusFilter] = useState<UserStatus | "all">("pending");
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState>(null);
+  const [previewImage, setPreviewImage] = useState<PreviewImage>(null);
 
   const filteredUsers = useMemo(() => {
     if (statusFilter === "all") return users;
@@ -95,21 +97,72 @@ export default function AdminKycPage() {
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-2">
-                  <a href={aadhaarFrontSrc || "#"} target="_blank" className="rounded-lg border border-zinc-700 p-2" rel="noreferrer">
+                  <div className="rounded-lg border border-zinc-700 p-2">
                     <p className="mb-2 text-xs text-zinc-400">Aadhaar Front</p>
-                    {aadhaarFrontSrc ? <img src={aadhaarFrontSrc} alt="Aadhaar front" className="h-48 w-full rounded object-cover" /> : <p className="text-xs">Not uploaded</p>}
-                  </a>
-                  <a href={aadhaarBackSrc || "#"} target="_blank" className="rounded-lg border border-zinc-700 p-2" rel="noreferrer">
+                    {aadhaarFrontSrc ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewImage({ src: aadhaarFrontSrc, title: "Aadhaar Front" })}
+                          className="w-full"
+                        >
+                          <img src={aadhaarFrontSrc} alt="Aadhaar front" className="h-48 w-full rounded object-cover" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewImage({ src: aadhaarFrontSrc, title: "Aadhaar Front" })}
+                          className="mt-2 rounded-md border border-zinc-700 px-3 py-1 text-xs text-zinc-200"
+                        >
+                          View Full Image
+                        </button>
+                      </>
+                    ) : (
+                      <p className="text-xs">Not uploaded</p>
+                    )}
+                  </div>
+                  <div className="rounded-lg border border-zinc-700 p-2">
                     <p className="mb-2 text-xs text-zinc-400">Aadhaar Back</p>
-                    {aadhaarBackSrc ? <img src={aadhaarBackSrc} alt="Aadhaar back" className="h-48 w-full rounded object-cover" /> : <p className="text-xs">Not uploaded</p>}
-                  </a>
+                    {aadhaarBackSrc ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewImage({ src: aadhaarBackSrc, title: "Aadhaar Back" })}
+                          className="w-full"
+                        >
+                          <img src={aadhaarBackSrc} alt="Aadhaar back" className="h-48 w-full rounded object-cover" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewImage({ src: aadhaarBackSrc, title: "Aadhaar Back" })}
+                          className="mt-2 rounded-md border border-zinc-700 px-3 py-1 text-xs text-zinc-200"
+                        >
+                          View Full Image
+                        </button>
+                      </>
+                    ) : (
+                      <p className="text-xs">Not uploaded</p>
+                    )}
+                  </div>
                 </div>
 
                 {selfieSrc ? (
-                  <a href={selfieSrc} target="_blank" className="block rounded-lg border border-zinc-700 p-2" rel="noreferrer">
+                  <div className="block rounded-lg border border-zinc-700 p-2">
                     <p className="mb-2 text-xs text-zinc-400">Selfie</p>
-                    <img src={selfieSrc} alt="Selfie" className="h-56 w-full rounded object-cover" />
-                  </a>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewImage({ src: selfieSrc, title: "Selfie" })}
+                      className="w-full"
+                    >
+                      <img src={selfieSrc} alt="Selfie" className="h-56 w-full rounded object-cover" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewImage({ src: selfieSrc, title: "Selfie" })}
+                      className="mt-2 rounded-md border border-zinc-700 px-3 py-1 text-xs text-zinc-200"
+                    >
+                      View Full Image
+                    </button>
+                  </div>
                 ) : null}
 
                 <div className="flex gap-2">
@@ -171,6 +224,34 @@ export default function AdminKycPage() {
             )}
           </div>
         </section>
+
+        {previewImage ? (
+          <div
+            className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4"
+            onClick={() => setPreviewImage(null)}
+          >
+            <div
+              className="glass w-full max-w-5xl rounded-xl border border-zinc-700 p-3"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-sm font-medium">{previewImage.title}</p>
+                <button
+                  type="button"
+                  onClick={() => setPreviewImage(null)}
+                  className="rounded-md border border-zinc-700 px-3 py-1 text-xs text-zinc-200"
+                >
+                  Close
+                </button>
+              </div>
+              <img
+                src={previewImage.src}
+                alt={previewImage.title}
+                className="max-h-[80vh] w-full rounded-lg object-contain"
+              />
+            </div>
+          </div>
+        ) : null}
       </AppShell>
     </AdminRoute>
   );

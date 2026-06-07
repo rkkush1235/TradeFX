@@ -93,13 +93,35 @@ export default function LoginPage() {
       await handlePostLoginRoute();
     } catch (error) {
       if (error instanceof FirebaseError) {
+        if (error.code === "auth/user-not-found") {
+          setAuthError("Account not found in Firebase Auth. Please sign up first, then wait for admin approval.");
+          return;
+        }
+        if (error.code === "auth/wrong-password") {
+          setAuthError("Incorrect password. Please try again.");
+          return;
+        }
         if (
           error.code === "auth/invalid-credential" ||
-          error.code === "auth/invalid-login-credentials" ||
-          error.code === "auth/wrong-password" ||
-          error.code === "auth/user-not-found"
+          error.code === "auth/invalid-login-credentials"
         ) {
-          setAuthError("Invalid email or password, or this account is not enabled in Firebase Auth.");
+          setAuthError("Invalid email or password.");
+          return;
+        }
+        if (error.code === "auth/user-disabled") {
+          setAuthError("This account is disabled in Firebase Auth. Please contact support.");
+          return;
+        }
+        if (error.code === "auth/operation-not-allowed") {
+          setAuthError("Email/password login is disabled in Firebase Auth. Enable Email/Password provider in Firebase Console.");
+          return;
+        }
+        if (error.code === "auth/too-many-requests") {
+          setAuthError("Too many attempts. Please wait a few minutes and try again.");
+          return;
+        }
+        if (error.code === "auth/network-request-failed") {
+          setAuthError("Network error. Please check your internet connection and try again.");
           return;
         }
         if (error.code === "unavailable" || error.code === "failed-precondition") {
