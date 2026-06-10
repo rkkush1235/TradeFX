@@ -43,6 +43,7 @@ export default function AdminPage() {
           <Link href="/admin/settings" className="glass p-4 text-sm hover:bg-zinc-900/40">Admin Settings</Link>
           <Link href="/admin/deposits" className="glass p-4 text-sm hover:bg-zinc-900/40">Deposit Approvals</Link>
           <Link href="/admin/withdrawals" className="glass p-4 text-sm hover:bg-zinc-900/40">Withdrawal Approvals</Link>
+          <Link href="/admin/bank-accounts" className="glass p-4 text-sm hover:bg-zinc-900/40">Bank Accounts</Link>
         </section>
 
         <section className="grid gap-3 md:grid-cols-2">
