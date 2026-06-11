@@ -8,6 +8,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/hooks/useAuth";
 import { useCreateDepositRequest, useDeposits } from "@/hooks/useWalletRequests";
 import { useBankAccounts } from "@/hooks/useBankAccounts";
+import { useAppSettings } from "@/hooks/useAppSettings";
 import { imageFileToCompressedBase64 } from "@/utils/imageBase64";
 import { formatCurrency } from "@/utils/format";
 
@@ -23,6 +24,7 @@ export default function DepositPage() {
   const createDeposit = useCreateDepositRequest();
   const rows = useDeposits(appUser?.uid);
   const { data: bankAccounts = [] } = useBankAccounts();
+  const { data: appSettings } = useAppSettings();
   
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [screenshotPreview, setScreenshotPreview] = useState<string>("");
@@ -135,12 +137,24 @@ export default function DepositPage() {
 
         <section className="glass space-y-3 p-4">
           <h3 className="text-sm font-medium">QR / Barcode</h3>
-          <div className="flex min-h-52 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/60 text-center">
-            <div>
-              <p className="text-sm font-medium text-zinc-200">QR Code Coming Soon</p>
-              <p className="mt-1 text-xs text-zinc-400">Barcode / scan payment option will be added soon.</p>
+          {appSettings?.qrCodeBase64 ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-6">
+              <img 
+                src={appSettings.qrCodeBase64} 
+                alt="Payment QR Code" 
+                className="w-40 h-40 border-2 border-emerald-500/50 rounded-lg p-2 bg-white"
+              />
+              <p className="mt-3 text-xs text-emerald-200">Scan to pay instantly</p>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900/60 p-8 text-center">
+              <div className="space-y-2">
+                <div className="text-2xl">📱</div>
+                <p className="text-sm font-medium text-zinc-200">QR Code Coming Soon</p>
+                <p className="text-xs text-zinc-400">Use bank transfer details above for now</p>
+              </div>
+            </div>
+          )}
         </section>
       </div>
 
