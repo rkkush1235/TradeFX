@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { adminUpdateTradeEntryPrice, closeTrade, ensureWallet, placeTrade, subscribeAllTrades, subscribeTrades, subscribeWallet } from "@/services/tradingService";
+import { adminUpdateTrade, adminUpdateTradeEntryPrice, closeTrade, ensureWallet, placeTrade, subscribeAllTrades, subscribeTrades, subscribeWallet } from "@/services/tradingService";
 import { Trade, Wallet } from "@/types";
 
 export function useWallet(userId?: string) {
@@ -64,4 +64,9 @@ export const useCloseTrade = () =>
 export const useAdminUpdateTradeEntryPrice = () =>
   useMutation({
     mutationFn: adminUpdateTradeEntryPrice,
+  });
+
+export const useAdminUpdateTrade = () =>
+  useMutation({
+    mutationFn: adminUpdateTrade,
   });

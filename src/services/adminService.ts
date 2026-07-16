@@ -8,6 +8,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where,
 } from "firebase/firestore";
@@ -143,6 +144,54 @@ export async function updateUserStatus(input: {
     createdAtServer: serverTimestamp(),
   });
 
+}
+
+export async function updateUserDetails(input: {
+  userId: string;
+  adminId: string;
+  patch: Partial<
+    Pick<
+      AppUser,
+      | "displayName"
+      | "firstName"
+      | "lastName"
+      | "email"
+      | "phone"
+      | "accountId"
+      | "plainPassword"
+      | "aadhaarNumber"
+      | "panNumber"
+      | "status"
+      | "balance"
+      | "locked"
+    >
+  >;
+}) {
+  const cleanPatch = Object.fromEntries(
+    Object.entries(input.patch).filter(([, value]) => value !== undefined),
+  );
+  if (typeof cleanPatch.locked === "number") {
+    cleanPatch.locked = Math.max(0, cleanPatch.locked);
+  }
+
+  await setDoc(
+    doc(usersCol, input.userId),
+    {
+      ...cleanPatch,
+      updatedAt: Date.now(),
+    },
+    { merge: true },
+  );
+
+  await addDoc(logsCol, {
+    userId: input.userId,
+    action: "user_details_updated",
+    actorId: input.adminId,
+    actorRole: "admin",
+    message: "User details updated by admin",
+    createdAt: Date.now(),
+    createdAtServer: serverTimestamp(),
+  });
 }
 
 export function subscribeAnalytics(onData: (data: DashboardAnalytics) => void) {

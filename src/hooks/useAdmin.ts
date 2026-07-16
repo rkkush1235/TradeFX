@@ -7,6 +7,7 @@ import {
   subscribeAnalytics,
   subscribeUsersByStatus,
   subscribeActivityLogs,
+  updateUserDetails,
   updateUserStatus,
 } from "@/services/adminService";
 import { ActivityLog, AppUser, DashboardAnalytics, UserStatus } from "@/types";
@@ -70,4 +71,9 @@ export function useActivityLogs() {
 export const useUpdateUserStatus = () =>
   useMutation({
     mutationFn: updateUserStatus,
+  });
+
+export const useUpdateUserDetails = () =>
+  useMutation({
+    mutationFn: updateUserDetails,
   });

@@ -13,6 +13,7 @@ import {
   Wallet,
   Landmark,
   HandCoins,
+  type LucideIcon,
 } from "lucide-react";
 
 const links = [
@@ -40,6 +41,9 @@ export function Sidebar() {
   const { sidebarOpen, setSidebarOpen } = useAppStore();
   const { appUser } = useAuth();
   const navLinks = appUser?.role === "admin" ? adminLinks : links;
+  const bottomLinks = links.filter((item) =>
+    ["/dashboard", "/markets", "/trades", "/wallet", "/profile"].includes(item.href),
+  );
 
   return (
     <>
@@ -63,6 +67,28 @@ export function Sidebar() {
       >
         <SidebarContent pathname={pathname} links={navLinks} onNavigate={() => setSidebarOpen(false)} />
       </aside>
+
+      {appUser?.role !== "admin" ? (
+        <nav className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 rounded-2xl border border-zinc-700/80 bg-zinc-950/95 p-1 shadow-2xl backdrop-blur md:hidden">
+          {bottomLinks.map((item) => {
+            const Icon = item.icon;
+            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-medium transition",
+                  active ? "bg-emerald-500/20 text-emerald-300" : "text-zinc-400",
+                )}
+              >
+                <Icon size={18} />
+                <span className="max-w-full truncate">{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      ) : null}
     </>
   );
 }
@@ -73,7 +99,7 @@ function SidebarContent({
   onNavigate,
 }: {
   pathname: string;
-  links: Array<{ href: string; label: string; icon: any }>;
+  links: Array<{ href: string; label: string; icon: LucideIcon }>;
   onNavigate?: () => void;
 }) {
   return (

@@ -41,15 +41,18 @@ export function useDeposits(userId?: string) {
   return rows;
 }
 
-export function useWithdrawals(userId?: string) {
+export function useWithdrawals(userId?: string, enabled = true) {
   const [rows, setRows] = useState<WithdrawalRequest[]>([]);
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
     const unsub = subscribeWithdrawals(setRows, userId, () => {
       setRows([]);
     });
     return () => unsub();
-  }, [userId]);
+  }, [userId, enabled]);
 
   return rows;
 }

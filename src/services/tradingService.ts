@@ -4,7 +4,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  increment,
   onSnapshot,
   orderBy,
   query,
@@ -35,6 +34,40 @@ async function latestPrice(asset: string) {
   return safeNumber(refreshed.prices[asset]?.priceUsd);
 }
 
+async function settleClosedTradeWallet(input: {
+  userId: string;
+  blockedMargin: number;
+  pnl: number;
+  now: number;
+}) {
+  const userRef = doc(usersCol, input.userId);
+
+  return runTransaction(db, async (tx) => {
+    const userSnap = await tx.get(userRef);
+    if (!userSnap.exists()) {
+      throw new Error("User profile not found");
+    }
+
+    const wallet = userSnap.data() as Partial<Wallet>;
+    const currentBalance = safeNumber(wallet.balance, 0, 1e12);
+    const currentLocked = Math.max(0, safeNumber(wallet.locked, 0, 1e12));
+    const releaseMargin = Math.min(currentLocked, Math.max(0, input.blockedMargin));
+    const creditAmount = releaseMargin + input.pnl;
+
+    tx.set(
+      userRef,
+      {
+        balance: currentBalance + creditAmount,
+        locked: Math.max(0, currentLocked - releaseMargin),
+        updatedAt: input.now,
+      },
+      { merge: true },
+    );
+
+    return { releaseMargin, creditAmount };
+  });
+}
+
 export async function ensureWallet(userId: string): Promise<Wallet> {
   const userRef = doc(usersCol, userId);
   const userSnap = await getDoc(userRef);
@@ -54,7 +87,7 @@ export async function ensureWallet(userId: string): Promise<Wallet> {
   const wallet: Wallet = {
     userId,
     balance: typeof data.balance === "number" ? data.balance : defaults.balance,
-    locked: typeof data.locked === "number" ? data.locked : defaults.locked,
+    locked: Math.max(0, typeof data.locked === "number" ? data.locked : defaults.locked),
     updatedAt: typeof data.updatedAt === "number" ? data.updatedAt : defaults.updatedAt,
   };
 
@@ -82,7 +115,7 @@ export function subscribeWallet(
       onData({
         userId,
         balance: typeof data.balance === "number" ? data.balance : 0,
-        locked: typeof data.locked === "number" ? data.locked : 0,
+        locked: Math.max(0, typeof data.locked === "number" ? data.locked : 0),
         updatedAt: typeof data.updatedAt === "number" ? data.updatedAt : Date.now(),
       });
     },
@@ -161,17 +194,13 @@ async function closePosition(userId: string, tradesToClose: Trade[], currentPric
       closedAt: now,
     });
 
-    await updateDoc(doc(usersCol, userId), {
-      balance: increment(blockedMargin + pnl),
-      locked: increment(-blockedMargin),
-      updatedAt: now,
-    });
+    const settlement = await settleClosedTradeWallet({ userId, blockedMargin, pnl, now });
 
     try {
       await addDoc(transactionsCol, {
         userId,
         type: "trade_pnl",
-        amount: blockedMargin + pnl,
+        amount: settlement.creditAmount,
         status: "completed",
         createdAt: now,
         createdAtServer: serverTimestamp(),
@@ -352,17 +381,18 @@ export async function closeTrade(trade: Trade) {
     closedAt: now,
   });
 
-  await updateDoc(doc(usersCol, trade.userId), {
-    balance: increment(blockedMargin + pnl),
-    locked: increment(-blockedMargin),
-    updatedAt: now,
+  const settlement = await settleClosedTradeWallet({
+    userId: trade.userId,
+    blockedMargin,
+    pnl,
+    now,
   });
 
   try {
     await addDoc(transactionsCol, {
       userId: trade.userId,
       type: "trade_pnl",
-      amount: blockedMargin + pnl,
+      amount: settlement.creditAmount,
       status: "completed",
       createdAt: now,
       createdAtServer: serverTimestamp(),
@@ -383,6 +413,54 @@ export async function adminUpdateTradeEntryPrice(input: {
 
   await updateDoc(doc(tradesCol, input.tradeId), {
     entryPrice: input.entryPrice,
+    updatedAt: Date.now(),
+  });
+}
+
+export async function adminUpdateTrade(input: {
+  tradeId: string;
+  patch: Partial<
+    Pick<
+      Trade,
+      | "asset"
+      | "type"
+      | "quantity"
+      | "leverage"
+      | "marginUsed"
+      | "entryPrice"
+      | "currentPrice"
+      | "pnl"
+      | "status"
+      | "closedAt"
+    >
+  >;
+}) {
+  const numericFields = ["quantity", "leverage", "marginUsed", "entryPrice", "currentPrice", "pnl"] as const;
+  const patch: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(input.patch)) {
+    if (value === undefined) continue;
+    if (numericFields.includes(key as (typeof numericFields)[number])) {
+      const numericValue = safeNumber(value, 0, 1e12);
+      if (key !== "pnl" && numericValue < 0) {
+        throw new Error(`${key} cannot be negative`);
+      }
+      patch[key] = numericValue;
+      continue;
+    }
+    patch[key] = value;
+  }
+
+  if (patch.status === "closed" && !patch.closedAt) {
+    patch.closedAt = Date.now();
+  }
+
+  if (patch.status === "open") {
+    patch.closedAt = null;
+  }
+
+  await updateDoc(doc(tradesCol, input.tradeId), {
+    ...patch,
     updatedAt: Date.now(),
   });
 }

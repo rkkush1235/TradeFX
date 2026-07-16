@@ -203,7 +203,7 @@ export async function adjustWallet(input: { userId: string; balance: number; loc
     doc(usersCol, input.userId),
     {
       balance: input.balance,
-      locked: input.locked ?? 0,
+      locked: Math.max(0, input.locked ?? 0),
       updatedAt: Date.now(),
     },
     { merge: true },
