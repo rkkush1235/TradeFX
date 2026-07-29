@@ -68,8 +68,8 @@ export default function Home() {
           <p className="text-xl font-semibold">Trade FX</p>
           <div className="flex gap-2">
             <a
-              href="/downloads/tradefx.apk"
-              download
+              href="/api/download/apk"
+              download="tradefx.apk"
               className="hidden items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-zinc-900 sm:inline-flex"
             >
               <Download size={16} />
@@ -98,8 +98,8 @@ export default function Home() {
               </h1>
               <div className="mt-5 flex flex-wrap items-center gap-3">
                 <a
-                  href="/downloads/tradefx.apk"
-                  download
+                  href="/api/download/apk"
+                  download="tradefx.apk"
                   className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-zinc-950"
                 >
                   <Download size={16} />
