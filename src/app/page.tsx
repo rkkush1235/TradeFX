@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Download } from "lucide-react";
 
 export default function Home() {
   const topAssets = [
@@ -66,6 +67,14 @@ export default function Home() {
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between">
           <p className="text-xl font-semibold">Trade FX</p>
           <div className="flex gap-2">
+            <a
+              href="/downloads/tradefx.apk"
+              download
+              className="hidden items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-zinc-900 sm:inline-flex"
+            >
+              <Download size={16} />
+              Download App
+            </a>
             <Link href="/signup" className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-zinc-900">
               Create Account
             </Link>
@@ -87,6 +96,19 @@ export default function Home() {
               <h1 className="mt-3 text-4xl font-bold leading-tight sm:text-5xl">
                 Trusted by 2 lakh+ users to learn, invest and trade digital assets
               </h1>
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                <a
+                  href="/downloads/tradefx.apk"
+                  download
+                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-zinc-950"
+                >
+                  <Download size={16} />
+                  Download Android App
+                </a>
+                <Link href="/login" className="rounded-lg border border-zinc-700 px-4 py-2 text-sm">
+                  Open Web App
+                </Link>
+              </div>
             </div>
 
             <div className="glass p-4">

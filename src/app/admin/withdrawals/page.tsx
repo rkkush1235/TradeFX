@@ -20,11 +20,24 @@ export default function AdminWithdrawalsPage() {
           <h3 className="mb-3 text-sm font-medium">Withdrawal Requests</h3>
           <div className="space-y-2">
             {withdrawals.map((item) => (
-              <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-700/80 p-3 text-sm">
-                <span>{item.userId.slice(0, 8)} • {formatCurrency(item.amount)} • {item.status}</span>
-                <div className="flex gap-2">
+              <div key={item.id} className="grid gap-3 rounded-lg border border-zinc-700/80 p-3 text-sm md:grid-cols-[1fr_auto]">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium">{formatCurrency(item.amount)}</p>
+                    <span className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] uppercase text-zinc-300">
+                      {item.status}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-400">
+                    User {item.userId.slice(0, 8)} • Requested {new Date(item.createdAt).toLocaleString()}
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    UPI {item.upiId || "-"} • A/C {item.accountNumber || "-"} • IFSC {item.ifscCode || "-"}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 md:justify-end">
                   <button
-                    disabled={reviewWithdrawal.isPending}
+                    disabled={reviewWithdrawal.isPending || item.status !== "pending"}
                     className="rounded-md bg-emerald-500 px-4 py-3 text-sm font-bold text-zinc-900"
                     onClick={async () => {
                       const key = `${item.id}-approve`;
@@ -41,7 +54,7 @@ export default function AdminWithdrawalsPage() {
                     {activeAction === `${item.id}-approve` ? "Approving..." : "Approve"}
                   </button>
                   <button
-                    disabled={reviewWithdrawal.isPending}
+                    disabled={reviewWithdrawal.isPending || item.status !== "pending"}
                     className="rounded-md bg-red-500 px-4 py-3 text-sm font-bold"
                     onClick={async () => {
                       const key = `${item.id}-reject`;
@@ -60,6 +73,11 @@ export default function AdminWithdrawalsPage() {
                 </div>
               </div>
             ))}
+            {!withdrawals.length ? (
+              <div className="rounded-lg border border-zinc-700/80 p-4 text-sm text-zinc-400">
+                No withdrawal request found.
+              </div>
+            ) : null}
           </div>
         </section>
       </AppShell>

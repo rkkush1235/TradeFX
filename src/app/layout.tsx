@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppProviders } from "@/components/providers/AppProviders";
@@ -16,6 +17,20 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Trade FX",
   description: "Realtime forex, crypto, and metals trading platform in USD",
+  applicationName: "Trade FX",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Trade FX",
+  },
+  icons: {
+    icon: "/app-icon.svg",
+    apple: "/app-icon.svg",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#070a11",
 };
 
 export default function RootLayout({

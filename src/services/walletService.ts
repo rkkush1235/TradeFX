@@ -96,15 +96,15 @@ export function subscribeWithdrawals(
   onError?: (error: unknown) => void,
 ) {
   const q = userId
-    ? query(withdrawalsCol, where("userId", "==", userId), orderBy("createdAt", "desc"))
+    ? query(withdrawalsCol, where("userId", "==", userId))
     : query(withdrawalsCol, orderBy("createdAt", "desc"));
 
   return onSnapshot(
     q,
     (snap) => {
-      onData(
-        snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<WithdrawalRequest, "id">) })),
-      );
+      const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<WithdrawalRequest, "id">) }));
+      rows.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+      onData(rows);
     },
     (error) => onError?.(error),
   );

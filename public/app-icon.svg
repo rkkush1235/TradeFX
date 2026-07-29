@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Trade FX">
+  <rect width="512" height="512" rx="112" fill="#070a11"/>
+  <path d="M112 332h288v48H112z" fill="#22c55e"/>
+  <path d="M136 282 224 194l58 58 92-108 36 32-126 148-60-60-54 54z" fill="#67e8f9"/>
+  <circle cx="392" cy="144" r="36" fill="#22c55e"/>
+  <text x="256" y="424" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="46" font-weight="700" fill="#f4f4f5">TRADE FX</text>
+</svg>
