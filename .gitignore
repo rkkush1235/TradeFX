@@ -35,7 +35,7 @@ mobile-app/dist/
 mobile-app/build/
 
 # generated app artifacts
-public/downloads/*.apk
+# public/downloads/*.apk
 public/downloads/*.aab
 
 # local editor files
