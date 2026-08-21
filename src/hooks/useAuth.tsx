@@ -66,7 +66,6 @@ async function upsertUserProfile(user: User, displayNameOverride?: string) {
     aadhaarBackBase64: "",
     selfieBase64: "",
     role: "user" as const,
-    assignedAdminId: "",
     status: "pending" as const,
     accountId: "",
     balance: 0,

@@ -41,11 +41,8 @@ export function Sidebar() {
   const pathname = usePathname();
   const { sidebarOpen, setSidebarOpen } = useAppStore();
   const { appUser } = useAuth();
-  const superLinks = [{ href: "/super-admin", label: "Super Admin", icon: Shield }, ...adminLinks];
-  const navLinks = appUser?.role === "super_admin" ? superLinks : appUser?.role === "admin" ? adminLinks : links;
-  const bottomLinks = appUser?.role === "super_admin"
-    ? superLinks.slice(0, 5)
-    : appUser?.role === "admin"
+  const navLinks = appUser?.role === "admin" ? adminLinks : links;
+  const bottomLinks = appUser?.role === "admin"
     ? adminLinks.slice(0, 5)
     : links.filter((item) =>
         ["/dashboard", "/markets", "/trades", "/wallet", "/profile"].includes(item.href),

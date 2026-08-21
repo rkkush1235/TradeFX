@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
 import { useMutation } from "@tanstack/react-query";
 import {
   subscribeUsers,
@@ -14,17 +13,14 @@ import {
 import { ActivityLog, AppUser, DashboardAnalytics, UserStatus } from "@/types";
 
 export function useUsers() {
-  const { appUser } = useAuth();
   const [users, setUsers] = useState<AppUser[]>([]);
 
   useEffect(() => {
-    const assignedAdminId = appUser?.role === "admin" ? appUser.uid : undefined;
-    if (!appUser) return;
     const unsub = subscribeUsers(setUsers, () => {
       setUsers([]);
-    }, assignedAdminId);
+    });
     return () => unsub();
-  }, [appUser]);
+  }, []);
 
   return users;
 }

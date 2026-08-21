@@ -11,7 +11,6 @@ import {
   setDoc,
   updateDoc,
   where,
-
 } from "firebase/firestore";
 import { db } from "@/firebase/firebase";
 import { ActivityLog, AppUser, DashboardAnalytics, UserStatus } from "@/types";
@@ -22,16 +21,13 @@ const logsCol = collection(db, "activityLogs");
 export function subscribeUsers(
   onData: (rows: AppUser[]) => void,
   onError?: (error: unknown) => void,
-  assignedAdminId?: string,
 ) {
-  const q = assignedAdminId
-    ? query(usersCol, where("assignedAdminId", "==", assignedAdminId))
-    : query(usersCol, orderBy("createdAt", "desc"));
+  const q = query(usersCol, orderBy("createdAt", "desc"));
 
   return onSnapshot(
     q,
     (snap) => {
-      onData(snap.docs.map((d) => d.data() as AppUser).filter((u) => u.role === "user" && !u.deleted));
+      onData(snap.docs.map((d) => d.data() as AppUser));
     },
     (error) => onError?.(error),
   );
@@ -221,64 +217,4 @@ export function subscribeAnalytics(
   });
 
   return () => {};
-}
-
-export function subscribeAdmins(onData: (rows: AppUser[]) => void, onError?: (error: unknown) => void) {
-  const q = query(usersCol, where("role", "in", ["admin", "super_admin"]));
-  return onSnapshot(q, (snap) => {
-    const rows = snap.docs.map((d) => d.data() as AppUser);
-    rows.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
-    onData(rows);
-  }, (error) => onError?.(error));
-}
-
-export async function assignClientToAdmin(input: { userId: string; adminId: string | null; actorId: string }) {
-  const adminRef = input.adminId ? doc(usersCol, input.adminId) : null;
-  if (adminRef) {
-    const snap = await getDoc(adminRef);
-    const admin = snap.data() as AppUser | undefined;
-    if (!admin || (admin.role !== "admin" && admin.role !== "super_admin")) throw new Error("Admin not found");
-  }
-  await setDoc(doc(usersCol, input.userId), { assignedAdminId: input.adminId ?? "", updatedAt: Date.now() }, { merge: true });
-  await addDoc(logsCol, { userId: input.userId, action: "client_assigned", actorId: input.actorId, actorRole: "super_admin", message: input.adminId ? `Client assigned to admin ${input.adminId}` : "Client unassigned", createdAt: Date.now(), createdAtServer: serverTimestamp() });
-}
-
-export async function setAdminStatus(input: { adminId: string; status: "active" | "disabled"; actorId: string }) {
-  const ref = doc(usersCol, input.adminId);
-  const snap = await getDoc(ref);
-  const admin = snap.data() as AppUser | undefined;
-  if (!admin || admin.role !== "admin") throw new Error("Only normal admins can be disabled from this action");
-  await updateDoc(ref, { adminStatus: input.status, updatedAt: Date.now() });
-  await addDoc(logsCol, { userId: input.adminId, action: `admin_${input.status}`, actorId: input.actorId, actorRole: "super_admin", message: `Admin ${input.status}`, createdAt: Date.now(), createdAtServer: serverTimestamp() });
-}
-
-export async function deleteClient(input: { userId: string; actorId: string }) {
-  await updateDoc(doc(usersCol, input.userId), { deleted: true, status: "banned", updatedAt: Date.now() });
-  await addDoc(logsCol, { userId: input.userId, action: "client_deleted", actorId: input.actorId, actorRole: "super_admin", message: "Client disabled/deleted by super admin", createdAt: Date.now(), createdAtServer: serverTimestamp() });
-}
-
-export async function createAdminProfile(input: { uid: string; email: string; displayName: string; phone?: string; actorId: string }) {
-  await setDoc(doc(usersCol, input.uid), {
-    uid: input.uid, email: input.email, displayName: input.displayName, phone: input.phone ?? "", role: "admin", status: "approved", adminStatus: "active", assignedAdminId: "", balance: 0, locked: 0, deposits: 0, withdrawals: 0, currency: "USD", createdAt: Date.now(), updatedAt: Date.now(), createdAtServer: serverTimestamp(),
-  }, { merge: true });
-  await addDoc(logsCol, { userId: input.uid, action: "admin_created", actorId: input.actorId, actorRole: "super_admin", message: `Admin ${input.email} created`, createdAt: Date.now(), createdAtServer: serverTimestamp() });
-}
-
-export function subscribeAssignedUsers(adminId: string, onData: (rows: AppUser[]) => void, onError?: (error: unknown) => void) {
-  const q = query(usersCol, where("assignedAdminId", "==", adminId));
-  return onSnapshot(q, (snap) => {
-    const rows = snap.docs.map((d) => d.data() as AppUser).filter((u) => u.role === "user" && !u.deleted);
-    rows.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
-    onData(rows);
-  }, (error) => onError?.(error));
-}
-
-
-export async function deleteAdmin(input: { adminId: string; actorId: string }) {
-  const ref = doc(usersCol, input.adminId);
-  const snap = await getDoc(ref);
-  const admin = snap.data() as AppUser | undefined;
-  if (!admin || admin.role !== "admin") throw new Error("Admin not found");
-  await updateDoc(ref, { deleted: true, adminStatus: "disabled", updatedAt: Date.now() });
-  await addDoc(logsCol, { userId: input.adminId, action: "admin_deleted", actorId: input.actorId, actorRole: "super_admin", message: "Admin disabled/deleted by super admin", createdAt: Date.now(), createdAtServer: serverTimestamp() });
 }

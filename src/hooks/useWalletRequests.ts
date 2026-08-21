@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
 import { useMutation } from "@tanstack/react-query";
 import {
   adjustWallet,
@@ -10,10 +9,8 @@ import {
   reviewDeposit,
   reviewWithdrawal,
   subscribeDeposits,
-  subscribeAssignedDeposits,
   subscribeTransactions,
   subscribeWithdrawals,
-  subscribeAssignedWithdrawals,
 } from "@/services/walletService";
 import { DepositRequest, Transaction, WithdrawalRequest } from "@/types";
 
@@ -32,36 +29,30 @@ export function useTransactions(userId?: string) {
 }
 
 export function useDeposits(userId?: string) {
-  const { appUser } = useAuth();
   const [rows, setRows] = useState<DepositRequest[]>([]);
 
   useEffect(() => {
-    const unsub = appUser?.role === "admin" && !userId
-      ? subscribeAssignedDeposits(appUser.uid, setRows, () => setRows([]))
-      : subscribeDeposits(setRows, userId, () => {
+    const unsub = subscribeDeposits(setRows, userId, () => {
       setRows([]);
     });
     return () => unsub();
-  }, [userId, appUser]);
+  }, [userId]);
 
   return rows;
 }
 
 export function useWithdrawals(userId?: string, enabled = true) {
-  const { appUser } = useAuth();
   const [rows, setRows] = useState<WithdrawalRequest[]>([]);
 
   useEffect(() => {
     if (!enabled) {
       return;
     }
-    const unsub = appUser?.role === "admin" && !userId
-      ? subscribeAssignedWithdrawals(appUser.uid, setRows, () => setRows([]))
-      : subscribeWithdrawals(setRows, userId, () => {
+    const unsub = subscribeWithdrawals(setRows, userId, () => {
       setRows([]);
     });
     return () => unsub();
-  }, [userId, enabled, appUser]);
+  }, [userId, enabled]);
 
   return rows;
 }
