@@ -1,83 +1,289 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ─────────────────────────────────────────────
+    // Helpers
+    // ─────────────────────────────────────────────
+
     function isAuth() {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      return isAuth() &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    function userDoc() {
+      return get(
+        /databases/$(database)/documents/users/$(request.auth.uid)
+      );
     }
+
+    function isSuperAdmin() {
+      return isAuth()
+        && exists(
+          /databases/$(database)/documents/users/$(request.auth.uid)
+        )
+        && userDoc().data.role == 'super_admin';
+    }
+
+    function isAdmin() {
+      return isAuth()
+        && exists(
+          /databases/$(database)/documents/users/$(request.auth.uid)
+        )
+        && userDoc().data.role == 'admin';
+    }
+
+    function isStaff() {
+      return isSuperAdmin() || isAdmin();
+    }
+
+    function isOwner(userId) {
+      return isAuth() && request.auth.uid == userId;
+    }
+
+    // ─────────────────────────────────────────────
+    // USERS
+    // ─────────────────────────────────────────────
 
     match /users/{userId} {
-      allow read: if isAuth() && (request.auth.uid == userId || isAdmin());
-      allow create: if isAuth() && request.auth.uid == userId && request.resource.data.role == 'user';
-      allow update: if isAdmin() || (
-        isAuth() &&
-        request.auth.uid == userId &&
-        resource.data.uid == request.resource.data.uid &&
-        resource.data.email == request.resource.data.email &&
-        resource.data.role == request.resource.data.role &&
-        resource.data.createdAt == request.resource.data.createdAt
-      );
-      allow delete: if isAdmin();
+
+      // Super admin -> all users
+      // Admin -> users assigned to that admin
+      // Client -> own profile
+      allow read: if isSuperAdmin()
+        || (
+          isAdmin()
+          && resource.data.assignedAdminId == request.auth.uid
+        )
+        || isOwner(userId);
+
+      // Normal client signup
+      allow create: if isAuth()
+        && request.auth.uid == userId
+        && request.resource.data.role == 'user';
+
+      // Super admin can modify anybody.
+      // Admin can modify only assigned client.
+      // Client can modify own restricted profile fields.
+      allow update: if isSuperAdmin()
+        || (
+          isAdmin()
+          && resource.data.assignedAdminId == request.auth.uid
+          && request.resource.data.assignedAdminId == resource.data.assignedAdminId
+        )
+        || (
+          isOwner(userId)
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.email == resource.data.email
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.createdAt == resource.data.createdAt
+        );
+
+      // Only Super Admin can delete users/admins.
+      allow delete: if isSuperAdmin();
     }
+
+
+    // ─────────────────────────────────────────────
+    // ACTIVITY LOGS
+    // ─────────────────────────────────────────────
 
     match /activityLogs/{logId} {
-      allow read, write: if isAdmin();
+      allow read, write: if isStaff();
     }
+
+
+    // ─────────────────────────────────────────────
+    // TRADES
+    // ─────────────────────────────────────────────
 
     match /trades/{tradeId} {
-      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow read: if isSuperAdmin()
+        || (
+          isAdmin()
+          && exists(
+            /databases/$(database)/documents/users/$(resource.data.userId)
+          )
+          && get(
+            /databases/$(database)/documents/users/$(resource.data.userId)
+          ).data.assignedAdminId == request.auth.uid
+        )
+        || (
+          isOwner(resource.data.userId)
+        );
+
+      allow create: if isAuth()
+        && request.resource.data.userId == request.auth.uid;
+
+      allow update, delete: if isSuperAdmin()
+        || (
+          isAdmin()
+          && exists(
+            /databases/$(database)/documents/users/$(resource.data.userId)
+          )
+          && get(
+            /databases/$(database)/documents/users/$(resource.data.userId)
+          ).data.assignedAdminId == request.auth.uid
+        )
+        || isOwner(resource.data.userId);
     }
+
+
+    // ─────────────────────────────────────────────
+    // TRANSACTIONS
+    // ─────────────────────────────────────────────
 
     match /transactions/{txId} {
-      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow read: if isSuperAdmin()
+        || (
+          isAdmin()
+          && exists(
+            /databases/$(database)/documents/users/$(resource.data.userId)
+          )
+          && get(
+            /databases/$(database)/documents/users/$(resource.data.userId)
+          ).data.assignedAdminId == request.auth.uid
+        )
+        || isOwner(resource.data.userId);
+
       allow create: if isAuth();
-      allow update, delete: if isAdmin();
+
+      allow update, delete: if isSuperAdmin()
+        || (
+          isAdmin()
+          && exists(
+            /databases/$(database)/documents/users/$(resource.data.userId)
+          )
+          && get(
+            /databases/$(database)/documents/users/$(resource.data.userId)
+          ).data.assignedAdminId == request.auth.uid
+        );
     }
+
+
+    // ─────────────────────────────────────────────
+    // DEPOSITS
+    // ─────────────────────────────────────────────
 
     match /deposits/{requestId} {
-      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+
+      allow read: if isSuperAdmin()
+        || (
+          isAdmin()
+          && exists(
+            /databases/$(database)/documents/users/$(resource.data.userId)
+          )
+          && get(
+            /databases/$(database)/documents/users/$(resource.data.userId)
+          ).data.assignedAdminId == request.auth.uid
+        )
+        || isOwner(resource.data.userId);
+
+      allow create: if isAuth()
+        && request.resource.data.userId == request.auth.uid;
+
+      allow update, delete: if isSuperAdmin()
+        || (
+          isAdmin()
+          && exists(
+            /databases/$(database)/documents/users/$(resource.data.userId)
+          )
+          && get(
+            /databases/$(database)/documents/users/$(resource.data.userId)
+          ).data.assignedAdminId == request.auth.uid
+        );
     }
+
+
+    // ─────────────────────────────────────────────
+    // WITHDRAWALS
+    // ─────────────────────────────────────────────
 
     match /withdrawals/{requestId} {
-      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+
+      allow read: if isSuperAdmin()
+        || (
+          isAdmin()
+          && exists(
+            /databases/$(database)/documents/users/$(resource.data.userId)
+          )
+          && get(
+            /databases/$(database)/documents/users/$(resource.data.userId)
+          ).data.assignedAdminId == request.auth.uid
+        )
+        || isOwner(resource.data.userId);
+
+      allow create: if isAuth()
+        && request.resource.data.userId == request.auth.uid;
+
+      allow update, delete: if isSuperAdmin()
+        || (
+          isAdmin()
+          && exists(
+            /databases/$(database)/documents/users/$(resource.data.userId)
+          )
+          && get(
+            /databases/$(database)/documents/users/$(resource.data.userId)
+          ).data.assignedAdminId == request.auth.uid
+        );
     }
+
+
+    // ─────────────────────────────────────────────
+    // NOTIFICATIONS
+    // ─────────────────────────────────────────────
 
     match /notifications/{notificationId} {
-      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create, update, delete: if isAdmin();
+
+      allow read: if isSuperAdmin()
+        || (
+          isAuth()
+          && resource.data.userId == request.auth.uid
+        );
+
+      allow create, update, delete: if isStaff();
     }
 
+
+    // ─────────────────────────────────────────────
+    // MARKET PRICES
+    // ─────────────────────────────────────────────
+
     match /marketPrices/{docId} {
+
       allow read: if isAuth();
-      allow write: if isAdmin();
+      allow write: if isStaff();
 
       match /history/{asset}/{candleId} {
         allow read: if isAuth();
-        allow write: if isAdmin();
+        allow write: if isStaff();
       }
     }
 
+
+    // ─────────────────────────────────────────────
+    // SYSTEM / MAINTENANCE
+    // ─────────────────────────────────────────────
+
     match /system/{docId} {
+
       allow read: if isAuth();
-      allow write: if isAdmin();
+      allow write: if isSuperAdmin();
     }
 
+
+    // ─────────────────────────────────────────────
+    // BANK ACCOUNTS
+    // ─────────────────────────────────────────────
+
     match /bankAccounts/{accountId} {
+
       allow read: if isAuth();
-      allow create, update, delete: if isAdmin();
+
+      allow create, update, delete: if isSuperAdmin()
+        || isAdmin();
     }
   }
 }

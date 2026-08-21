@@ -33,6 +33,7 @@ const adminLinks = [
   { href: "/admin/kyc", label: "Admin KYC", icon: Shield },
   { href: "/admin/deposits", label: "Admin Deposits", icon: Landmark },
   { href: "/admin/withdrawals", label: "Admin Withdrawals", icon: HandCoins },
+  { href: "/admin/bank-accounts", label: "Deposit Accounts", icon: Landmark },
   // { href: "/admin/settings", label: "Admin Settings", icon: Settings },
 ];
 
@@ -40,10 +41,15 @@ export function Sidebar() {
   const pathname = usePathname();
   const { sidebarOpen, setSidebarOpen } = useAppStore();
   const { appUser } = useAuth();
-  const navLinks = appUser?.role === "admin" ? adminLinks : links;
-  const bottomLinks = links.filter((item) =>
-    ["/dashboard", "/markets", "/trades", "/wallet", "/profile"].includes(item.href),
-  );
+  const superLinks = [{ href: "/super-admin", label: "Super Admin", icon: Shield }, ...adminLinks];
+  const navLinks = appUser?.role === "super_admin" ? superLinks : appUser?.role === "admin" ? adminLinks : links;
+  const bottomLinks = appUser?.role === "super_admin"
+    ? superLinks.slice(0, 5)
+    : appUser?.role === "admin"
+    ? adminLinks.slice(0, 5)
+    : links.filter((item) =>
+        ["/dashboard", "/markets", "/trades", "/wallet", "/profile"].includes(item.href),
+      );
 
   return (
     <>
@@ -68,8 +74,7 @@ export function Sidebar() {
         <SidebarContent pathname={pathname} links={navLinks} onNavigate={() => setSidebarOpen(false)} />
       </aside>
 
-      {appUser?.role !== "admin" ? (
-        <nav className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 rounded-2xl border border-zinc-700/80 bg-zinc-950/95 p-1 shadow-2xl backdrop-blur md:hidden">
+      <nav className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 rounded-2xl border border-zinc-700/80 bg-zinc-950/95 p-1 shadow-2xl backdrop-blur md:hidden">
           {bottomLinks.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -88,7 +93,6 @@ export function Sidebar() {
             );
           })}
         </nav>
-      ) : null}
     </>
   );
 }

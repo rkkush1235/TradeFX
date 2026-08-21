@@ -25,6 +25,7 @@ export async function createDepositRequest(input: {
   amount: number;
   upiId: string;
   screenshotUrl: string;
+  depositAccountId?: string;
 }) {
   await addDoc(depositsCol, {
     ...input,
@@ -198,4 +199,31 @@ export async function adjustWallet(input: { userId: string; balance: number; loc
     createdAtServer: serverTimestamp(),
     note: "Admin wallet adjustment",
   });
+}
+
+export function subscribeAssignedDeposits(adminId: string, onData: (rows: DepositRequest[]) => void, onError?: (error: unknown) => void) {
+  return subscribeAssignedPaymentRows(adminId, "deposits", onData, onError);
+}
+
+export function subscribeAssignedWithdrawals(adminId: string, onData: (rows: WithdrawalRequest[]) => void, onError?: (error: unknown) => void) {
+  return subscribeAssignedPaymentRows(adminId, "withdrawals", onData, onError);
+}
+
+function subscribeAssignedPaymentRows<T extends DepositRequest | WithdrawalRequest>(adminId: string, kind: "deposits" | "withdrawals", onData: (rows: T[]) => void, onError?: (error: unknown) => void) {
+  const userQuery = query(usersCol, where("assignedAdminId", "==", adminId), where("role", "==", "user"));
+  let childUnsubs: Array<() => void> = [];
+  let rows = new Map<string, T>();
+  let stopped = false;
+  const unsubUsers = onSnapshot(userQuery, (usersSnap) => {
+    childUnsubs.forEach((u) => u()); childUnsubs = []; rows = new Map();
+    usersSnap.docs.forEach((userDoc) => {
+      const q = query(collection(db, kind), where("userId", "==", userDoc.id), orderBy("createdAt", "desc"));
+      childUnsubs.push(onSnapshot(q, (snap) => {
+        snap.docs.forEach((d) => rows.set(d.id, { id: d.id, ...(d.data() as Omit<T, "id">) } as T));
+        if (!stopped) onData(Array.from(rows.values()).sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)));
+      }, onError));
+    });
+    if (!usersSnap.size) onData([]);
+  }, onError);
+  return () => { stopped = true; childUnsubs.forEach((u) => u()); unsubUsers(); };
 }

@@ -10,8 +10,12 @@ export default function MarketsPage() {
 
   return (
     <AppShell title="Markets">
-      <MarketCards snapshot={snapshot} />
-      <TradingChart />
+      <section className="mobile-chart-sticky">
+        <TradingChart />
+      </section>
+      <section className="mobile-market-list">
+        <MarketCards snapshot={snapshot} />
+      </section>
     </AppShell>
   );
 }

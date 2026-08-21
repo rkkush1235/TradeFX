@@ -8,16 +8,12 @@ import { useEffect } from "react";
 export function AdminRoute({ children }: { children: React.ReactNode }) {
   const { appUser, loading } = useAuth();
   const router = useRouter();
+  const isAdmin = appUser?.role === "admin" || appUser?.role === "super_admin";
 
   useEffect(() => {
-    if (!loading && appUser?.role !== "admin") {
-      router.replace("/dashboard");
-    }
-  }, [loading, appUser, router]);
+    if (!loading && !isAdmin) router.replace("/dashboard");
+  }, [loading, isAdmin, router]);
 
-  if (loading || appUser?.role !== "admin") {
-    return <BrandLoader />;
-  }
-
+  if (loading || !isAdmin) return <BrandLoader />;
   return <>{children}</>;
 }

@@ -19,16 +19,17 @@ export default function DashboardPage() {
 
   return (
     <AppShell title="Dashboard">
-      <MarketCards snapshot={market} />
-      <TradingChart />
+      <section className="mobile-chart-sticky">
+        <TradingChart />
+      </section>
+
+      <section className="mobile-market-list">
+        <MarketCards snapshot={market} />
+      </section>
 
       <section className="glass p-4">
         <h3 className="mb-3 text-sm font-medium">My Buy/Sell Positions</h3>
-        <TradesTable
-          trades={trades.slice(0, 8)}
-          priceMap={market.prices}
-          onClose={(trade) => closeTrade.mutate(trade)}
-        />
+        <TradesTable trades={trades.slice(0, 8)} priceMap={market.prices} onClose={(trade) => closeTrade.mutate(trade)} />
       </section>
 
       <section className="glass p-4">

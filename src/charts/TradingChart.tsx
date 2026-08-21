@@ -112,7 +112,7 @@ export function TradingChart() {
           key={tvSymbol}
           src={embedSrc}
           title={`${effectiveSymbol} tradingview chart`}
-          className="h-[360px] w-full md:h-[460px]"
+          className="h-[250px] w-full sm:h-[290px] md:h-[460px]"
           allow="clipboard-write; fullscreen"
           loading="lazy"
         />

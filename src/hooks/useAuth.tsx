@@ -66,6 +66,7 @@ async function upsertUserProfile(user: User, displayNameOverride?: string) {
     aadhaarBackBase64: "",
     selfieBase64: "",
     role: "user" as const,
+    assignedAdminId: "",
     status: "pending" as const,
     accountId: "",
     balance: 0,
@@ -93,13 +94,10 @@ async function upsertUserProfile(user: User, displayNameOverride?: string) {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [appUser, setAppUser] = useState<AppUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => Boolean(auth));
 
   useEffect(() => {
     if (!auth) {
-      setFirebaseUser(null);
-      setAppUser(null);
-      setLoading(false);
       return;
     }
 

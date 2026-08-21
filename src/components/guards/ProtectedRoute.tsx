@@ -4,18 +4,16 @@ import { useAuth } from "@/hooks/useAuth";
 import { BrandLoader } from "@/components/common/BrandLoader";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useAppSettings } from "@/hooks/useAppSettings";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { firebaseUser, appUser, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
+  const { data: appSettings } = useAppSettings();
+  const isAdminRoute = pathname.startsWith("/admin") || pathname.startsWith("/super-admin");
+  const isAdmin = appUser?.role === "admin" || appUser?.role === "super_admin";
   useEffect(() => {
     if (!loading && !firebaseUser) {
       router.replace("/login");
@@ -24,15 +22,21 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (loading || !appUser) return;
-    const isAdminRoute = pathname.startsWith("/admin");
-    const isAdmin = appUser.role === "admin";
-
     if (!isAdminRoute && !isAdmin && appUser.status !== "approved") {
       router.replace("/approval-status");
     }
-  }, [loading, appUser, pathname, router]);
+  }, [loading, appUser, isAdminRoute, isAdmin, router]);
 
-  if (!mounted || loading) {
+  if (appSettings?.maintenanceMode && appUser?.role !== "super_admin" && !isAdminRoute) {
+    return (
+      <div className="mx-auto flex min-h-[60vh] w-full max-w-xl flex-col items-center justify-center gap-3 px-4 text-center">
+        <p className="text-sm font-semibold text-amber-300">TradeFX is under maintenance</p>
+        <p className="text-sm text-zinc-400">{appSettings.maintenanceMessage || "Please try again shortly."}</p>
+      </div>
+    );
+  }
+
+  if (loading) {
     return <BrandLoader />;
   }
 
@@ -50,8 +54,6 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const isAdminRoute = pathname.startsWith("/admin");
-  const isAdmin = appUser?.role === "admin";
   if (!isAdminRoute && !isAdmin && appUser && appUser.status !== "approved") {
     return (
       <div className="mx-auto flex min-h-[60vh] w-full max-w-xl flex-col items-center justify-center gap-3 px-4 text-center">

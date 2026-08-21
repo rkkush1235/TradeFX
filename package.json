@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "create-super-admin": "node scripts/create-super-admin.js"
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
@@ -16,6 +17,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.3.0",
     "firebase": "^12.13.0",
+    "firebase-admin": "^13.10.0",
     "framer-motion": "^12.40.0",
     "lightweight-charts": "^5.2.0",
     "lucide-react": "^1.16.0",

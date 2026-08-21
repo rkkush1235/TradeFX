@@ -206,3 +206,56 @@ body {
     filter: drop-shadow(0 0 10px rgba(103, 232, 249, 0.44));
   }
 }
+
+/* Mobile trading layout: keep the active chart visible and scroll only the instrument list. */
+@media (max-width: 767px) {
+  .mobile-chart-sticky {
+    position: sticky;
+    top: 0.5rem;
+    z-index: 30;
+  }
+
+  .mobile-chart-sticky > div {
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.28);
+  }
+
+  .mobile-chart-sticky .glass {
+    padding: 0.75rem;
+  }
+
+  .mobile-chart-sticky h3 {
+    font-size: 0.75rem;
+  }
+
+  .mobile-market-list {
+    max-height: 260px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-right: 2px;
+  }
+
+  .mobile-market-list > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+  }
+
+  .mobile-market-list > div > div {
+    padding: 0.7rem;
+  }
+
+  .mobile-market-list > div > div h3 {
+    margin-top: 0.15rem;
+    font-size: 0.95rem;
+  }
+
+  .mobile-market-list > div > div .mt-3 {
+    margin-top: 0.5rem;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+}
+
+.field { width: 100%; border-radius: 0.5rem; border: 1px solid rgb(63 63 70); background: rgb(24 24 27 / .7); padding: .5rem .75rem; font-size: .875rem; color: rgb(244 244 245); }

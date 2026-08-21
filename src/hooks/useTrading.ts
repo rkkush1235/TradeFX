@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
 import { useMutation } from "@tanstack/react-query";
-import { adminUpdateTrade, adminUpdateTradeEntryPrice, closeTrade, ensureWallet, placeTrade, subscribeAllTrades, subscribeTrades, subscribeWallet } from "@/services/tradingService";
+import { adminUpdateTrade, adminUpdateTradeEntryPrice, closeTrade, ensureWallet, placeTrade, subscribeAllTrades, subscribeAssignedTrades, subscribeTrades, subscribeWallet } from "@/services/tradingService";
 import { Trade, Wallet } from "@/types";
 
 export function useWallet(userId?: string) {
@@ -39,14 +40,17 @@ export function useTrades(userId?: string) {
 }
 
 export function useAllTrades() {
+  const { appUser } = useAuth();
   const [trades, setTrades] = useState<Trade[]>([]);
 
   useEffect(() => {
-    const unsub = subscribeAllTrades(setTrades, () => {
+    const unsub = appUser?.role === "admin"
+      ? subscribeAssignedTrades(appUser.uid, setTrades, () => setTrades([]))
+      : subscribeAllTrades(setTrades, () => {
       setTrades([]);
     });
     return () => unsub();
-  }, []);
+  }, [appUser]);
 
   return trades;
 }

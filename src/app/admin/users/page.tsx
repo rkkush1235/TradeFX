@@ -8,6 +8,8 @@ import { AdminRoute } from "@/components/guards/AdminRoute";
 import { useAuth } from "@/hooks/useAuth";
 import { useUpdateUserDetails, useUpdateUserStatus, useUsers } from "@/hooks/useAdmin";
 import { useAdjustWallet, useWithdrawals } from "@/hooks/useWalletRequests";
+import { useUserDepositAccount, useSaveUserDepositAccount } from "@/hooks/useBankAccounts";
+import { imageFileToCompressedBase64 } from "@/utils/imageBase64";
 import { useAdminUpdateTrade, useCloseTrade, useTrades } from "@/hooks/useTrading";
 import { AppUser, Trade, UserStatus, WithdrawalRequest } from "@/types";
 import { cn, formatCurrency, safeNumber } from "@/utils/format";
@@ -101,6 +103,7 @@ export default function AdminUsersPage() {
   const adjustWallet = useAdjustWallet();
   const updateTrade = useAdminUpdateTrade();
   const closeTrade = useCloseTrade();
+  const saveDepositAccount = useSaveUserDepositAccount();
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<UserStatus | "all">("all");
@@ -118,8 +121,8 @@ export default function AdminUsersPage() {
   }, [users, search, statusFilter]);
 
   const selectedUser = useMemo(
-    () => users.find((user) => user.uid === selectedUserId) ?? rows[0],
-    [rows, selectedUserId, users],
+    () => selectedUserId ? users.find((user) => user.uid === selectedUserId) : undefined,
+    [selectedUserId, users],
   );
   const withdrawals = useWithdrawals(selectedUser?.uid, Boolean(selectedUser?.uid));
   const trades = useTrades(selectedUser?.uid);
@@ -191,7 +194,7 @@ export default function AdminUsersPage() {
         </section>
 
         <section className="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)]">
-          <div className="glass max-h-[72vh] overflow-auto p-3">
+          <div className={cn("glass max-h-[62vh] overflow-auto p-3 lg:max-h-[72vh]", selectedUser ? "hidden lg:block" : "block")}>
             <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
               <UserRound size={16} className="text-emerald-300" />
               Users
@@ -231,6 +234,7 @@ export default function AdminUsersPage() {
           </div>
 
           {selectedUser ? (
+            <div className="min-w-0">
             <UserDetail
               key={selectedUser.uid}
               user={selectedUser}
@@ -252,7 +256,11 @@ export default function AdminUsersPage() {
               onWallet={(balance) => adjustWallet.mutateAsync({ userId: selectedUser.uid, balance })}
               onTrade={(input) => updateTrade.mutateAsync(input)}
               onCloseTrade={(trade) => closeTrade.mutateAsync(trade)}
+              onSaveDepositAccount={(input) => saveDepositAccount.mutateAsync(input)}
+              depositAccountPending={saveDepositAccount.isPending}
+              onBack={() => setSelectedUserId(null)}
             />
+            </div>
           ) : null}
         </section>
       </AppShell>
@@ -280,6 +288,9 @@ function UserDetail({
   onWallet,
   onTrade,
   onCloseTrade,
+  onSaveDepositAccount,
+  depositAccountPending,
+  onBack,
 }: {
   user: AppUser;
   appUserId: string;
@@ -300,9 +311,12 @@ function UserDetail({
   onWallet: (balance: number) => Promise<unknown>;
   onTrade: (input: { tradeId: string; patch: Partial<Pick<Trade, "asset" | "type" | "quantity" | "leverage" | "marginUsed" | "entryPrice" | "currentPrice" | "pnl" | "status" | "closedAt">> }) => Promise<unknown>;
   onCloseTrade: (trade: Trade) => Promise<unknown>;
+  onSaveDepositAccount: (input: { userId: string; adminId: string; bankName: string; accountHolderName: string; accountNumber: string; ifscCode: string; qrCodeBase64: string }) => Promise<unknown>;
+  depositAccountPending: boolean;
+  onBack: () => void;
 }) {
   const [editForm, setEditForm] = useState<EditForm>(makeEditForm(user));
-
+  const { data: depositAccount, isLoading: depositAccountLoading } = useUserDepositAccount(user.uid);
   const saveDetails = async () => {
     onSetActiveAction(`${user.uid}-details`);
     try {
@@ -335,6 +349,7 @@ function UserDetail({
 
   return (
     <div className="space-y-4">
+      <button type="button" onClick={onBack} className="mb-1 rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 lg:hidden">← Back to users</button>
       <section className="glass p-4">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -363,8 +378,8 @@ function UserDetail({
           <Field label="Email" value={editForm.email} onChange={(value) => setEditForm((prev) => ({ ...prev, email: value }))} />
           <Field label="Phone" value={editForm.phone} onChange={(value) => setEditForm((prev) => ({ ...prev, phone: value }))} />
           <Field label="Client ID" value={editForm.accountId} onChange={(value) => setEditForm((prev) => ({ ...prev, accountId: value }))} />
-          <Field label="Password" value={editForm.plainPassword} onChange={(value) => setEditForm((prev) => ({ ...prev, plainPassword: value }))} />
-          <Field label="Aadhaar" value={editForm.aadhaarNumber} onChange={(value) => setEditForm((prev) => ({ ...prev, aadhaarNumber: value }))} />
+          <Field label="Password" type="password" value={editForm.plainPassword} onChange={(value) => setEditForm((prev) => ({ ...prev, plainPassword: value }))} />
+          <Field label="Aadhaar" type="password" value={editForm.aadhaarNumber} onChange={(value) => setEditForm((prev) => ({ ...prev, aadhaarNumber: value }))} />
           <Field label="PAN" value={editForm.panNumber} onChange={(value) => setEditForm((prev) => ({ ...prev, panNumber: value }))} />
           <label className="space-y-1 text-xs text-zinc-400">
             <span>Status</span>
@@ -382,6 +397,16 @@ function UserDetail({
           <Field label="Locked" type="number" value={editForm.locked} onChange={(value) => setEditForm((prev) => ({ ...prev, locked: value }))} />
         </div>
       </section>
+
+      <DepositAccountEditor
+        key={`${user.uid}-${depositAccount?.id ?? "new"}-${depositAccount?.updatedAt ?? ""}`}
+        userId={user.uid}
+        adminId={appUserId}
+        depositAccount={depositAccount}
+        loading={depositAccountLoading}
+        pending={depositAccountPending}
+        onSave={onSaveDepositAccount}
+      />
 
       <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
         <KycPanel user={user} check={kycCheck} onRun={onRunKyc} />
@@ -413,6 +438,152 @@ function UserDetail({
 
       <WithdrawalHistory rows={withdrawals} />
     </div>
+  );
+}
+
+function DepositAccountEditor({
+  userId,
+  adminId,
+  depositAccount,
+  loading,
+  pending,
+  onSave,
+}: {
+  userId: string;
+  adminId: string;
+  depositAccount?: {
+    id?: string;
+    bankName?: string;
+    accountHolderName?: string;
+    accountNumber?: string;
+    ifscCode?: string;
+    qrCodeBase64?: string;
+    updatedAt?: number;
+  };
+  loading: boolean;
+  pending: boolean;
+  onSave: (input: {
+    userId: string;
+    adminId: string;
+    bankName: string;
+    accountHolderName: string;
+    accountNumber: string;
+    ifscCode: string;
+    qrCodeBase64: string;
+  }) => Promise<unknown>;
+}) {
+  const [form, setForm] = useState({
+    bankName: depositAccount?.bankName ?? "",
+    accountHolderName: depositAccount?.accountHolderName ?? "",
+    accountNumber: depositAccount?.accountNumber ?? "",
+    ifscCode: depositAccount?.ifscCode ?? "",
+    qrCodeBase64: depositAccount?.qrCodeBase64 ?? "",
+  });
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const handleQr = async (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("QR / barcode must be an image file.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError("QR image must be smaller than 5MB.");
+      return;
+    }
+
+    try {
+      setError("");
+      const qrCodeBase64 = await imageFileToCompressedBase64(file);
+      setForm((prev) => ({ ...prev, qrCodeBase64 }));
+    } catch (qrError) {
+      console.error("[Admin Users] QR processing failed", qrError);
+      setError("Could not process the QR / barcode image.");
+    }
+  };
+
+  const save = async () => {
+    if (!adminId) return;
+    if (
+      !form.bankName.trim() ||
+      !form.accountHolderName.trim() ||
+      !form.accountNumber.trim() ||
+      !form.ifscCode.trim() ||
+      !form.qrCodeBase64
+    ) {
+      setError("Bank details and a QR / barcode are required.");
+      return;
+    }
+
+    setMessage("");
+    setError("");
+    try {
+      await onSave({ userId, adminId, ...form });
+      setMessage("Deposit bank account and QR updated successfully.");
+    } catch (saveError) {
+      console.error("[Admin Users] Deposit account update failed", saveError);
+      setError("Could not update the deposit account. Check Firestore rules and try again.");
+    }
+  };
+
+  return (
+    <section className="glass p-4">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold">User Deposit Bank Account & QR</h3>
+          <p className="mt-1 text-xs text-zinc-400">
+            Only this user will see these payment details on the Deposit page.
+          </p>
+        </div>
+        <span className="rounded-full border border-zinc-700 px-2 py-1 text-[10px] text-zinc-400">
+          {depositAccount ? "Assigned" : "Not assigned"}
+        </span>
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-zinc-500">Loading deposit account...</p>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_15rem]">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Bank Name" value={form.bankName} onChange={(value) => setForm((p) => ({ ...p, bankName: value }))} />
+            <Field label="Account Holder" value={form.accountHolderName} onChange={(value) => setForm((p) => ({ ...p, accountHolderName: value }))} />
+            <Field label="Account Number" value={form.accountNumber} onChange={(value) => setForm((p) => ({ ...p, accountNumber: value }))} />
+            <Field label="IFSC Code" value={form.ifscCode} onChange={(value) => setForm((p) => ({ ...p, ifscCode: value.toUpperCase() }))} />
+
+            <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
+              <label className="inline-flex cursor-pointer rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300">
+                Upload New QR / Barcode
+                <input type="file" accept="image/*" className="hidden" onChange={(event) => void handleQr(event.target.files?.[0])} />
+              </label>
+              {form.qrCodeBase64 ? (
+                <button type="button" onClick={() => setForm((p) => ({ ...p, qrCodeBase64: "" }))} className="rounded-lg border border-red-500/30 px-3 py-2 text-xs text-red-300">
+                  Remove QR
+                </button>
+              ) : null}
+            </div>
+
+            {error ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200 sm:col-span-2">{error}</p> : null}
+            {message ? <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-200 sm:col-span-2">{message}</p> : null}
+
+            <button type="button" onClick={() => void save()} disabled={pending} className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-bold text-zinc-950 disabled:opacity-50 sm:col-span-2">
+              {pending ? "Saving Deposit Account..." : "Save Bank Account & QR"}
+            </button>
+          </div>
+
+          <div className="rounded-xl border border-zinc-700 bg-white/5 p-3">
+            <p className="mb-2 text-xs text-zinc-400">Current QR / Barcode</p>
+            {form.qrCodeBase64 ? (
+              <img src={form.qrCodeBase64} alt="User deposit QR" className="mx-auto aspect-square w-full max-w-52 rounded-lg bg-white object-contain p-2" />
+            ) : (
+              <div className="flex aspect-square items-center justify-center rounded-lg border border-dashed border-zinc-700 text-center text-xs text-zinc-500">
+                No QR assigned
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 

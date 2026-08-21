@@ -228,7 +228,7 @@ export function MarketCards({ snapshot }: { snapshot: MarketSnapshot }) {
             key={item.symbol}
             whileHover={{ y: -2 }}
             onClick={() => setSelectedSymbol(item.symbol)}
-            className={`glass p-4 text-left transition ${
+            className={`glass p-3 sm:p-4 text-left transition ${
               selected ? "ring-1 ring-emerald-500/80" : ""
             }`}
             initial={{ opacity: 0, y: 6 }}

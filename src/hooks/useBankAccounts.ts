@@ -1,14 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  addDoc,
-  deleteDoc,
-  doc,
-  updateDoc,
-} from "firebase/firestore";
+import { collection, query, where, getDocs, getDoc, addDoc, doc, setDoc } from "firebase/firestore";
 import { db } from "@/firebase/firebase";
 
 export interface BankAccount {
@@ -17,44 +8,57 @@ export interface BankAccount {
   accountHolderName: string;
   accountNumber: string;
   ifscCode: string;
+  qrCodeBase64?: string;
   isActive: boolean;
   createdAt: number;
   updatedAt: number;
+  assignedUserId?: string;
+  updatedBy?: string;
 }
 
 const COLLECTION_NAME = "bankAccounts";
+const USER_COLLECTION_NAME = "userDepositAccounts";
 
-// Fetch all active bank accounts
 export function useBankAccounts() {
   return useQuery({
     queryKey: ["bankAccounts"],
     queryFn: async () => {
-      try {
-        const q = query(
-          collection(db, COLLECTION_NAME),
-          where("isActive", "==", true)
-        );
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as BankAccount[];
-      } catch (error) {
-        console.error("Error fetching bank accounts:", error);
-        return [];
-      }
+      const q = query(collection(db, COLLECTION_NAME), where("isActive", "==", true));
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map((item) => ({ id: item.id, ...item.data() })) as BankAccount[];
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 1000 * 60 * 5,
   });
 }
 
-// Add new bank account
+export function useUserDepositAccount(userId?: string) {
+  return useQuery({
+    queryKey: ["userDepositAccount", userId],
+    enabled: Boolean(userId),
+    queryFn: async () => {
+      if (!userId) return null;
+      const item = await getDoc(doc(db, USER_COLLECTION_NAME, userId));
+      return item.exists() ? ({ id: item.id, ...item.data() } as BankAccount) : null;
+    },
+    staleTime: 1000 * 60,
+  });
+}
+
+export function useAllUserDepositAccounts() {
+  return useQuery({
+    queryKey: ["userDepositAccounts"],
+    queryFn: async () => {
+      const snapshot = await getDocs(collection(db, USER_COLLECTION_NAME));
+      return snapshot.docs.map((item) => ({ id: item.id, ...item.data() })) as BankAccount[];
+    },
+    staleTime: 1000 * 60,
+  });
+}
+
 export function useAddBankAccount() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (
-      account: Omit<BankAccount, "id" | "createdAt" | "updatedAt">
-    ) => {
+    mutationFn: async (account: Omit<BankAccount, "id" | "createdAt" | "updatedAt">) => {
       const docRef = await addDoc(collection(db, COLLECTION_NAME), {
         ...account,
         createdAt: Date.now(),
@@ -62,30 +66,38 @@ export function useAddBankAccount() {
       });
       return docRef.id;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["bankAccounts"] });
-    },
-    onError: (error) => {
-      console.error("Error adding bank account:", error);
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["bankAccounts"] }),
   });
 }
 
-// Delete bank account (soft delete - set isActive to false)
-export function useDeleteBankAccount() {
+export function useSaveUserDepositAccount() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (accountId: string) => {
-      await updateDoc(doc(db, COLLECTION_NAME, accountId), {
-        isActive: false,
+    mutationFn: async (input: {
+      userId: string;
+      adminId: string;
+      bankName: string;
+      accountHolderName: string;
+      accountNumber: string;
+      ifscCode: string;
+      qrCodeBase64: string;
+    }) => {
+      await setDoc(doc(db, USER_COLLECTION_NAME, input.userId), {
+        userId: input.userId,
+        bankName: input.bankName.trim(),
+        accountHolderName: input.accountHolderName.trim(),
+        accountNumber: input.accountNumber.trim(),
+        ifscCode: input.ifscCode.trim().toUpperCase(),
+        qrCodeBase64: input.qrCodeBase64,
+        isActive: true,
+        createdAt: Date.now(),
         updatedAt: Date.now(),
-      });
+        updatedBy: input.adminId,
+      }, { merge: true });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["bankAccounts"] });
-    },
-    onError: (error) => {
-      console.error("Error deleting bank account:", error);
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["userDepositAccount", variables.userId] });
+      queryClient.invalidateQueries({ queryKey: ["userDepositAccounts"] });
     },
   });
 }

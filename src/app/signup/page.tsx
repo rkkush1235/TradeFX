@@ -10,7 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { FirebaseError } from "firebase/app";
 import { auth, db, isFirebaseConfigured } from "@/firebase/firebase";
 import { deleteUser } from "firebase/auth";
-import { deleteDoc, doc, setDoc } from "firebase/firestore";
+import { deleteDoc, doc, setDoc, Timestamp } from "firebase/firestore";
 import { estimateDataUrlBytes, imageFileToCompressedBase64 } from "@/utils/imageBase64";
 
 const COUNTRY_CODES = [
@@ -215,7 +215,7 @@ export default function SignupPage() {
       const uid = createdUid;
 
       setProgressMessage("Saving KYC details...");
-      const now = Date.now();
+      const now = Timestamp.now().toMillis();
       await setDoc(
         doc(db, "users", uid),
         {

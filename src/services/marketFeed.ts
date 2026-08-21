@@ -5,7 +5,7 @@ import { POLL_INTERVAL_MS } from "@/utils/constants";
 type Listener = (snapshot: MarketSnapshot) => void;
 
 let snapshotCache: MarketSnapshot = emptySnapshot();
-let listeners = new Set<Listener>();
+const listeners = new Set<Listener>();
 let forexTimer: ReturnType<typeof setInterval> | null = null;
 let forexInFlight = false;
 let socket: WebSocket | null = null;

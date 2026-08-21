@@ -1,18 +1,43 @@
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
+
     function isAuth() {
       return request.auth != null;
     }
 
+    function isSuperAdmin() {
+      return isAuth()
+        && firestore.get(
+          /databases/(default)/documents/users/$(request.auth.uid)
+        ).data.role == 'super_admin';
+    }
+
+    function isAdmin() {
+      return isAuth()
+        && firestore.get(
+          /databases/(default)/documents/users/$(request.auth.uid)
+        ).data.role == 'admin';
+    }
+
     match /deposits/{userId}/{allPaths=**} {
-      allow read: if isAuth();
-      allow write: if isAuth() && request.auth.uid == userId;
+
+      allow read: if isAuth()
+        || isSuperAdmin()
+        || isAdmin();
+
+      allow write: if isAuth()
+        && request.auth.uid == userId;
     }
 
     match /kyc/{userId}/{allPaths=**} {
-      allow read: if isAuth() && request.auth.uid == userId;
-      allow write: if isAuth() && request.auth.uid == userId;
+
+      allow read: if request.auth.uid == userId
+        || isSuperAdmin()
+        || isAdmin();
+
+      allow write: if request.auth.uid == userId;
     }
 
     match /{allPaths=**} {
