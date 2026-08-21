@@ -14,7 +14,6 @@ import {
 } from "firebase/firestore";
 import { db } from "@/firebase/firebase";
 import { DepositRequest, Transaction, WithdrawalRequest } from "@/types";
-import { sendSystemEmail } from "@/services/notificationService";
 
 const usersCol = collection(db, "users");
 const depositsCol = collection(db, "deposits");
@@ -144,16 +143,6 @@ export async function reviewDeposit(input: {
     });
   }
 
-  const userSnap = await getDoc(doc(usersCol, input.userId));
-  const userEmail = userSnap.data()?.email as string | undefined;
-  if (userEmail) {
-    await sendSystemEmail({
-      type: "deposit",
-      to: userEmail,
-      amount: input.amount,
-      status: input.status,
-    });
-  }
 }
 
 export async function reviewWithdrawal(input: {
@@ -186,16 +175,7 @@ export async function reviewWithdrawal(input: {
     });
   }
 
-  const userSnap = await getDoc(doc(usersCol, input.userId));
-  const userEmail = userSnap.data()?.email as string | undefined;
-  if (userEmail) {
-    await sendSystemEmail({
-      type: "withdrawal",
-      to: userEmail,
-      amount: input.amount,
-      status: input.status,
-    });
-  }
+
 }
 
 export async function adjustWallet(input: { userId: string; balance: number; locked?: number }) {
