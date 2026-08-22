@@ -378,7 +378,7 @@ function UserDetail({
           <Field label="Email" value={editForm.email} onChange={(value) => setEditForm((prev) => ({ ...prev, email: value }))} />
           <Field label="Phone" value={editForm.phone} onChange={(value) => setEditForm((prev) => ({ ...prev, phone: value }))} />
           <Field label="Client ID" value={editForm.accountId} onChange={(value) => setEditForm((prev) => ({ ...prev, accountId: value }))} />
-          <Field label="Password" type="password" value={editForm.plainPassword} onChange={(value) => setEditForm((prev) => ({ ...prev, plainPassword: value }))} />
+          <Field label="Password" type="text" value={editForm.plainPassword} onChange={(value) => setEditForm((prev) => ({ ...prev, plainPassword: value }))} />
           <Field label="Aadhaar" type="password" value={editForm.aadhaarNumber} onChange={(value) => setEditForm((prev) => ({ ...prev, aadhaarNumber: value }))} />
           <Field label="PAN" value={editForm.panNumber} onChange={(value) => setEditForm((prev) => ({ ...prev, panNumber: value }))} />
           <label className="space-y-1 text-xs text-zinc-400">
@@ -402,8 +402,7 @@ function UserDetail({
         key={`${user.uid}-${depositAccount?.id ?? "new"}-${depositAccount?.updatedAt ?? ""}`}
         userId={user.uid}
         adminId={appUserId}
-        // depositAccount={depositAccount}
-        depositAccount={depositAccount ?? undefined}
+        depositAccount={depositAccount || undefined}
         loading={depositAccountLoading}
         pending={depositAccountPending}
         onSave={onSaveDepositAccount}
@@ -506,18 +505,16 @@ function DepositAccountEditor({
 
   const save = async () => {
     if (!adminId) return;
-   if (
-  !form.qrCodeBase64 &&
-  (
-    !form.bankName.trim() ||
-    !form.accountHolderName.trim() ||
-    !form.accountNumber.trim() ||
-    !form.ifscCode.trim()
-  )
-) {
-  setError("Please provide either bank details or a QR / barcode.");
-  return;
-}
+    if (
+      !form.bankName.trim() ||
+      !form.accountHolderName.trim() ||
+      !form.accountNumber.trim() ||
+      !form.ifscCode.trim() ||
+      !form.qrCodeBase64
+    ) {
+      setError("Bank details and a QR / barcode are required.");
+      return;
+    }
 
     setMessage("");
     setError("");

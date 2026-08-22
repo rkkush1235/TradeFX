@@ -1,4 +1,4 @@
-export type UserRole = "user" | "admin";
+export type UserRole = "user" | "admin" | "super_admin";
 export type UserStatus = "pending" | "approved" | "rejected" | "suspended" | "banned";
 
 export interface AppUser {
@@ -19,6 +19,9 @@ export interface AppUser {
   selfieBase64?: string;
   role: UserRole;
   status?: UserStatus;
+  assignedAdminId?: string;
+  deleted?: boolean;
+  adminStatus?: "active" | "disabled";
   accountId?: string;
   currency?: string;
   balance?: number;
@@ -72,6 +75,7 @@ export interface Trade {
   userDisplayName?: string;
   userEmail?: string;
   userSearchKey?: string;
+  assignedAdminId?: string;
 }
 
 export interface Wallet {

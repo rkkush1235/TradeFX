@@ -195,15 +195,25 @@ export default function DepositPage() {
             <p className="text-xs text-amber-400">Compressing image...</p>
           )}
           {screenshotPreview && (
-            <div className="relative mt-2 rounded-lg overflow-hidden border border-zinc-700">
-              <img src={screenshotPreview} alt="Payment screenshot preview" className="w-full h-auto max-h-48 object-cover" />
+            <div className="relative mt-2 overflow-hidden rounded-lg border border-zinc-700">
+              <img
+                src={screenshotPreview}
+                alt="Payment screenshot preview"
+                className="h-auto max-h-48 w-full object-cover"
+              />
+
               <button
                 type="button"
                 onClick={() => {
                   setScreenshotPreview("");
-                  if (fileInputRef.current) fileInputRef.current.value = "";
+
+                  if (fileInputRef.current) {
+                    fileInputRef.current.value = "";
+                  }
+
+                  setUploadError("");
                 }}
-                className="absolute top-2 right-2 rounded-lg bg-red-500 px-2 py-1 text-xs text-white hover:bg-red-600"
+                className="absolute right-2 top-2 rounded-lg bg-red-500 px-2 py-1 text-xs text-white hover:bg-red-600"
               >
                 Remove
               </button>

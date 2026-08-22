@@ -234,7 +234,7 @@ async function openPosition(input: {
     throw new Error("User profile not found");
   }
 
-  const userProfile = userProfileSnap.data() as { displayName?: string; email?: string };
+  const userProfile = userProfileSnap.data() as { displayName?: string; email?: string; assignedAdminId?: string };
   const userDisplayName = userProfile.displayName ?? "Trader";
   const userEmail = userProfile.email ?? "";
   const userSearchKey = `${userDisplayName} ${userEmail} ${userId}`.trim().toLowerCase();
@@ -273,6 +273,7 @@ async function openPosition(input: {
     userDisplayName,
     userEmail,
     userSearchKey,
+    assignedAdminId: userProfile.assignedAdminId ?? "",
     asset,
     type,
     quantity,
@@ -463,4 +464,24 @@ export async function adminUpdateTrade(input: {
     ...patch,
     updatedAt: Date.now(),
   });
+}
+
+
+export function subscribeAssignedTrades(adminId: string, onData: (rows: Trade[]) => void, onError?: (error: unknown) => void) {
+  const userQuery = query(usersCol, where("assignedAdminId", "==", adminId), where("role", "==", "user"));
+  let childUnsubs: Array<() => void> = [];
+  let rows = new Map<string, Trade>();
+  let stopped = false;
+  const unsubUsers = onSnapshot(userQuery, (usersSnap) => {
+    childUnsubs.forEach((u) => u()); childUnsubs = []; rows = new Map();
+    usersSnap.docs.forEach((userDoc) => {
+      const q = query(tradesCol, where("userId", "==", userDoc.id));
+      childUnsubs.push(onSnapshot(q, (snap) => {
+        snap.docs.forEach((d) => rows.set(d.id, { id: d.id, ...(d.data() as Omit<Trade, "id">) } as Trade));
+        if (!stopped) onData(Array.from(rows.values()).sort((a, b) => b.timestamp - a.timestamp));
+      }, onError));
+    });
+    if (!usersSnap.size) onData([]);
+  }, onError);
+  return () => { stopped = true; childUnsubs.forEach((u) => u()); unsubUsers(); };
 }
