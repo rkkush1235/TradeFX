@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { normalizeRole } from "@/utils/roles";
 
-export function AdminRoute({ children }: { children: React.ReactNode }) {
+export function SuperAdminRoute({ children }: { children: React.ReactNode }) {
   const { appUser, loading } = useAuth();
   const router = useRouter();
   const role = normalizeRole(appUser?.role);
@@ -14,17 +14,12 @@ export function AdminRoute({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading || !appUser) return;
 
-    if (role === "super_admin") {
-      router.replace("/super-admin");
-      return;
-    }
-
-    if (role !== "admin") {
-      router.replace("/dashboard");
+    if (role !== "super_admin") {
+      router.replace(role === "admin" ? "/admin" : "/dashboard");
     }
   }, [loading, appUser, role, router]);
 
-  if (loading || !appUser || role !== "admin") {
+  if (loading || !appUser || role !== "super_admin") {
     return <BrandLoader />;
   }
 

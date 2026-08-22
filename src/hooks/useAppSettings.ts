@@ -4,6 +4,8 @@ import { db } from "@/firebase/firebase";
 
 export interface AppSettings {
   qrCodeBase64?: string;
+  maintenanceMode?: boolean;
+  maintenanceMessage?: string;
   updatedAt?: number;
 }
 
@@ -73,5 +75,16 @@ export function useDeleteQRCode() {
     onError: (error) => {
       console.error("Error deleting QR code:", error);
     },
+  });
+}
+
+
+export function useSetMaintenanceMode() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { enabled: boolean; message?: string; updatedBy: string }) => {
+      await setDoc(doc(db, SETTINGS_COLLECTION, SETTINGS_DOC), { maintenanceMode: input.enabled, maintenanceMessage: input.message ?? "TradeFX is temporarily under maintenance. Please try again shortly.", updatedAt: Date.now(), updatedBy: input.updatedBy }, { merge: true });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["appSettings"] }),
   });
 }

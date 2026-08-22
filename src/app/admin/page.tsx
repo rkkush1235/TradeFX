@@ -74,7 +74,7 @@ export default function AdminPage() {
           <div className="glass p-4 text-sm">Pending Deposits: {pendingDeposits || analytics.pendingDeposits}</div>
           <div className="glass p-4 text-sm">Pending Withdrawals: {pendingWithdrawals || analytics.pendingWithdrawals}</div>
         </section>
-
+{/* 
         <section className="glass p-4">
           <h3 className="mb-3 text-sm font-medium">Admin Activity Logs</h3>
           <div className="space-y-2 text-xs text-zinc-300">
@@ -86,7 +86,7 @@ export default function AdminPage() {
             ))}
             {!logs.length ? <p className="text-zinc-500">No activity logs yet.</p> : null}
           </div>
-        </section>
+        </section> */}
 
         <section className="glass space-y-3 p-4">
           <h3 className="text-sm font-medium">Manual Market Price Edit</h3>
