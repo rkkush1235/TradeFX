@@ -4,6 +4,7 @@ import { db } from "@/firebase/firebase";
 
 export interface BankAccount {
   id: string;
+  userId?: string;
   bankName: string;
   accountHolderName: string;
   accountNumber: string;

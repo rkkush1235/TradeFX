@@ -402,7 +402,8 @@ function UserDetail({
         key={`${user.uid}-${depositAccount?.id ?? "new"}-${depositAccount?.updatedAt ?? ""}`}
         userId={user.uid}
         adminId={appUserId}
-        depositAccount={depositAccount}
+        // depositAccount={depositAccount}
+        depositAccount={depositAccount ?? undefined}
         loading={depositAccountLoading}
         pending={depositAccountPending}
         onSave={onSaveDepositAccount}

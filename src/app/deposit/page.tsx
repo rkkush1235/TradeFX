@@ -24,7 +24,7 @@ export default function DepositPage() {
   const createDeposit = useCreateDepositRequest();
   const rows = useDeposits(appUser?.uid);
   const { data: depositAccount, isLoading: isDepositAccountLoading } = useUserDepositAccount(appUser?.uid);
-  
+
   const [screenshotPreview, setScreenshotPreview] = useState<string>("");
   const [uploadError, setUploadError] = useState<string>("");
   const [successMessage, setSuccessMessage] = useState<string>("");
@@ -38,7 +38,7 @@ export default function DepositPage() {
   const handleFileSelect = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     setUploadError("");
-    
+
     if (!file) {
       setScreenshotPreview("");
       return;
@@ -81,7 +81,7 @@ export default function DepositPage() {
 
     try {
       setUploadError("");
-      
+
       // Submit deposit with base64 screenshot
       await createDeposit.mutateAsync({
         userId: appUser.uid,
@@ -95,7 +95,7 @@ export default function DepositPage() {
       reset();
       setScreenshotPreview("");
       if (fileInputRef.current) fileInputRef.current.value = "";
-      
+
       setTimeout(() => setSuccessMessage(""), 4000);
     } catch (error) {
       setUploadError("Failed to submit deposit. Please try again.");
@@ -130,9 +130,9 @@ export default function DepositPage() {
           <h3 className="text-sm font-medium">QR / Barcode</h3>
           {depositAccount?.qrCodeBase64 ? (
             <div className="flex flex-col items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-6">
-              <img 
-                src={depositAccount.qrCodeBase64} 
-                alt="Payment QR Code" 
+              <img
+                src={depositAccount.qrCodeBase64}
+                alt="Payment QR Code"
                 className="w-40 h-40 border-2 border-emerald-500/50 rounded-lg p-2 bg-white"
               />
               <p className="mt-3 text-xs text-emerald-200">Scan to pay instantly</p>
@@ -156,7 +156,7 @@ export default function DepositPage() {
         className="glass mx-auto w-full max-w-xl space-y-3 p-4"
       >
         <h3 className="text-sm font-medium">Deposit Request</h3>
-        
+
         {successMessage && (
           <div className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 p-3 text-sm text-emerald-200">
             {successMessage}
@@ -200,7 +200,6 @@ export default function DepositPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setScreenshot(null);
                   setScreenshotPreview("");
                   if (fileInputRef.current) fileInputRef.current.value = "";
                 }}

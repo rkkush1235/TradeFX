@@ -26,7 +26,7 @@ export default function BankAccountsPage() {
     return key.includes(search.toLowerCase());
   }), [users, search]);
 
-  const selectedAssignment = assignments.find((item) => item.userId === selectedUserId);
+  const selectedAssignment = assignments.find((item) => item?.userId === selectedUserId);
 
   const selectUser = (userId: string) => {
     setSelectedUserId(userId);
