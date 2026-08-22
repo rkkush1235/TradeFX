@@ -54,7 +54,7 @@ export default function App() {
 
       {/* Website */}
       <View style={styles.webContainer}>
-
+//adeed
         <WebView
           ref={webViewRef}
           source={{ uri: 'https://trade-fx-4ir7.vercel.app/login' }}
