@@ -32,6 +32,7 @@ function normalizeRole(
   const role = String(value ?? "")
     .trim()
     .toLowerCase();
+    console.log("[normalizeRole] role:", role);
 
   if (role === "super_admin") {
     return "super_admin";

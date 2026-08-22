@@ -69,30 +69,48 @@ async function getUserProfile(
   }
 
   const raw = snap.data() as Record<string, unknown>;
-  const role = normalizeRole(raw.role);
-  const rawRole = String(raw.role ?? "").trim().toLowerCase();
 
-  // Clean accidental whitespace such as "super_admin\n" without changing
-  // a legitimate role value. This keeps routing and Firestore consistent.
+  const role = normalizeRole(raw.role);
+  const rawRole = String(raw.role ?? "")
+    .trim()
+    .toLowerCase();
+
+  // Clean accidental whitespace without changing
+  // the actual role value.
   if (rawRole && rawRole !== String(raw.role ?? "")) {
-    await setDoc(userRef, { role }, { merge: true });
+    await setDoc(
+      userRef,
+      { role },
+      { merge: true },
+    );
   }
 
-return {
-  ...(raw as unknown as AppUser),
-  uid: user.uid,
-  email: String(raw.email ?? user.email ?? ""),
-  displayName: String(
-    raw.displayName ??
-      user.displayName ??
-      `${raw.firstName ?? ""} ${raw.lastName ?? ""}`.trim(),
-  ),
-  role: raw.role === "admin" ? "admin" : "user",
-  createdAt:
-    typeof raw.createdAt === "number"
-      ? raw.createdAt
-      : Date.now(),
-};
+  return {
+    ...(raw as unknown as AppUser),
+
+    uid: user.uid,
+
+    email: String(
+      raw.email ?? user.email ?? "",
+    ),
+
+    displayName: String(
+      raw.displayName ??
+        user.displayName ??
+        `${raw.firstName ?? ""} ${raw.lastName ?? ""}`.trim(),
+    ),
+
+    // IMPORTANT:
+    // super_admin -> super_admin
+    // admin       -> admin
+    // user        -> user
+    role: normalizeRole(raw.role),
+
+    createdAt:
+      typeof raw.createdAt === "number"
+        ? raw.createdAt
+        : Number(raw.createdAt ?? Date.now()),
+  };
 }
 
 /**
