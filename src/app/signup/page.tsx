@@ -125,14 +125,16 @@ const schema = z.object({
       message: "Aadhaar must be exactly 12 digits",
     }),
 
-  // PAN is completely optional
-  panNumber: z
-    .string()
-    .optional()
-    .or(z.literal(""))
-    .transform((value) =>
-      value ? value.toUpperCase().replace(/\s+/g, "") : "",
-    ),
+  // PAN IS OPTIONAL
+  // Empty string is valid. If entered, it must be a valid PAN.
+  panNumber: z.string().refine(
+    (value) =>
+      value === "" ||
+      /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(value),
+    {
+      message: "PAN must be like ABCDE1234F",
+    },
+  ),
 
   // Aadhaar photos are required
   aadhaarFront: z.any(),
@@ -142,21 +144,28 @@ const schema = z.object({
   selfie: z.any().optional(),
 });
 
-type FormData = z.infer<typeof schema>;
+type FormData = {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string;
+  password: string;
+  aadhaarNumber: string;
+  panNumber: string;
+  aadhaarFront: FileList;
+  aadhaarBack: FileList;
+  selfie?: FileList;
+};
 
 export default function SignupPage() {
   const { signup } = useAuth();
   const router = useRouter();
 
-  const [authError, setAuthError] = useState<string>("");
-  const [progressMessage, setProgressMessage] =
-    useState<string>("");
+  const [authError, setAuthError] = useState("");
+  const [progressMessage, setProgressMessage] = useState("");
 
-  const [countryCode, setCountryCode] =
-    useState<string>("+91");
-
-  const [localPhone, setLocalPhone] =
-    useState<string>("");
+  const [countryCode, setCountryCode] = useState("+91");
+  const [localPhone, setLocalPhone] = useState("");
 
   const maxLocalDigits =
     PHONE_LENGTH_BY_COUNTRY_CODE[
@@ -218,6 +227,7 @@ export default function SignupPage() {
         return;
       }
 
+      // Aadhaar front and back are required
       if (!frontFile || !backFile) {
         setAuthError(
           "Aadhaar front and back photos are required.",
@@ -237,6 +247,8 @@ export default function SignupPage() {
         email,
         password: data.password,
         aadhaarNumber: data.aadhaarNumber,
+
+        // PAN only sent when provided
         ...(data.panNumber
           ? { panNumber: data.panNumber }
           : {}),
@@ -318,11 +330,15 @@ export default function SignupPage() {
           aadhaarFrontUrl: "",
           aadhaarBackUrl: "",
           selfieUrl: "",
+
           aadhaarFrontBase64,
           aadhaarBackBase64,
           selfieBase64,
+
           kycSubmittedAt: now,
           updatedAt: now,
+
+          // PAN only saved when provided
           ...(data.panNumber
             ? { panNumber: data.panNumber }
             : {}),
@@ -365,9 +381,7 @@ export default function SignupPage() {
           return;
         }
 
-        if (
-          error.code === "auth/operation-not-allowed"
-        ) {
+        if (error.code === "auth/operation-not-allowed") {
           setAuthError(
             "Email/Password signup is disabled in Firebase Authentication. Please enable it.",
           );
@@ -375,9 +389,7 @@ export default function SignupPage() {
           return;
         }
 
-        if (
-          error.code === "auth/configuration-not-found"
-        ) {
+        if (error.code === "auth/configuration-not-found") {
           setAuthError(
             "Firebase Auth configuration missing for this project. Check Authentication setup.",
           );
@@ -401,9 +413,7 @@ export default function SignupPage() {
           return;
         }
 
-        if (
-          error.code === "auth/network-request-failed"
-        ) {
+        if (error.code === "auth/network-request-failed") {
           setAuthError(
             "Network request failed. Check internet and try again.",
           );
@@ -437,6 +447,8 @@ export default function SignupPage() {
           <h1 className="text-2xl font-semibold">
             Create Account
           </h1>
+
+          {/* FIRST NAME + LAST NAME */}
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
@@ -472,6 +484,8 @@ export default function SignupPage() {
             </div>
           </div>
 
+          {/* PHONE */}
+
           <div>
             <input
               type="hidden"
@@ -482,8 +496,7 @@ export default function SignupPage() {
               <select
                 value={countryCode}
                 onChange={(event) => {
-                  const nextCode =
-                    event.target.value;
+                  const nextCode = event.target.value;
 
                   const nextMax =
                     PHONE_LENGTH_BY_COUNTRY_CODE[
@@ -499,7 +512,9 @@ export default function SignupPage() {
                   setValue(
                     "phone",
                     `${nextCode}${nextLocal}`,
-                    { shouldValidate: true },
+                    {
+                      shouldValidate: true,
+                    },
                   );
                 }}
                 className="rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2"
@@ -520,17 +535,18 @@ export default function SignupPage() {
                 inputMode="numeric"
                 maxLength={maxLocalDigits}
                 onChange={(event) => {
-                  const digits =
-                    event.target.value
-                      .replace(/\D/g, "")
-                      .slice(0, maxLocalDigits);
+                  const digits = event.target.value
+                    .replace(/\D/g, "")
+                    .slice(0, maxLocalDigits);
 
                   setLocalPhone(digits);
 
                   setValue(
                     "phone",
                     `${countryCode}${digits}`,
-                    { shouldValidate: true },
+                    {
+                      shouldValidate: true,
+                    },
                   );
                 }}
                 className="w-full rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2"
@@ -541,6 +557,8 @@ export default function SignupPage() {
               {errors.phone?.message}
             </p>
           </div>
+
+          {/* EMAIL */}
 
           <div>
             <input
@@ -557,6 +575,8 @@ export default function SignupPage() {
               {errors.email?.message}
             </p>
           </div>
+
+          {/* PASSWORD */}
 
           <div>
             <input
@@ -576,6 +596,8 @@ export default function SignupPage() {
             </p>
           </div>
 
+          {/* AADHAAR NUMBER */}
+
           <div>
             <input
               {...register("aadhaarNumber")}
@@ -583,15 +605,16 @@ export default function SignupPage() {
               inputMode="numeric"
               maxLength={12}
               onChange={(event) => {
-                const digits =
-                  event.target.value
-                    .replace(/\D/g, "")
-                    .slice(0, 12);
+                const digits = event.target.value
+                  .replace(/\D/g, "")
+                  .slice(0, 12);
 
                 setValue(
                   "aadhaarNumber",
                   digits,
-                  { shouldValidate: true },
+                  {
+                    shouldValidate: true,
+                  },
                 );
               }}
               className="w-full rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2"
@@ -610,16 +633,17 @@ export default function SignupPage() {
               placeholder="PAN Number (Optional)"
               maxLength={10}
               onChange={(event) => {
-                const normalized =
-                  event.target.value
-                    .toUpperCase()
-                    .replace(/[^A-Z0-9]/g, "")
-                    .slice(0, 10);
+                const normalized = event.target.value
+                  .toUpperCase()
+                  .replace(/[^A-Z0-9]/g, "")
+                  .slice(0, 10);
 
                 setValue(
                   "panNumber",
                   normalized,
-                  { shouldValidate: true },
+                  {
+                    shouldValidate: true,
+                  },
                 );
               }}
               className="w-full rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 uppercase"
@@ -627,6 +651,10 @@ export default function SignupPage() {
 
             <p className="mt-1 text-xs text-zinc-500">
               PAN is optional.
+            </p>
+
+            <p className="mt-1 text-xs text-red-400">
+              {errors.panNumber?.message}
             </p>
           </div>
 
@@ -677,6 +705,8 @@ export default function SignupPage() {
             />
           </div>
 
+          {/* SIGNUP */}
+
           <button
             disabled={isSubmitting}
             className="w-full rounded-lg bg-emerald-500 px-3 py-2 font-medium text-zinc-900 disabled:cursor-not-allowed disabled:opacity-70"
@@ -692,17 +722,23 @@ export default function SignupPage() {
             )}
           </button>
 
+          {/* PROGRESS */}
+
           {isSubmitting && progressMessage ? (
             <div className="rounded-lg border border-zinc-700 bg-zinc-900/50 px-3 py-2 text-xs text-zinc-300">
               {progressMessage}
             </div>
           ) : null}
 
+          {/* ERROR */}
+
           {authError ? (
             <p className="text-sm text-red-400">
               {authError}
             </p>
           ) : null}
+
+          {/* LOGIN */}
 
           <p className="text-sm text-zinc-400">
             Already have an account?{" "}
@@ -714,6 +750,8 @@ export default function SignupPage() {
             </Link>
           </p>
         </form>
+
+        {/* TRUSTED TRADING ECOSYSTEM */}
 
         <section className="glass space-y-4 p-6">
           <h2 className="text-lg font-semibold">

@@ -38,7 +38,7 @@ export interface SignupPayload {
   email: string;
   password: string;
   aadhaarNumber: string;
-  panNumber: string;
+  panNumber?: string;
 }
 
 interface AuthContextShape {
@@ -78,16 +78,21 @@ async function getUserProfile(
     await setDoc(userRef, { role }, { merge: true });
   }
 
-  return {
-    ...(raw as AppUser),
-    uid: user.uid,
-    email: String(raw.email ?? user.email ?? ""),
-    displayName: String(
-      raw.displayName ?? user.displayName ?? "Trader",
-    ),
-    role,
-    createdAt: Number(raw.createdAt ?? Date.now()),
-  };
+return {
+  ...(raw as unknown as AppUser),
+  uid: user.uid,
+  email: String(raw.email ?? user.email ?? ""),
+  displayName: String(
+    raw.displayName ??
+      user.displayName ??
+      `${raw.firstName ?? ""} ${raw.lastName ?? ""}`.trim(),
+  ),
+  role: raw.role === "admin" ? "admin" : "user",
+  createdAt:
+    typeof raw.createdAt === "number"
+      ? raw.createdAt
+      : Date.now(),
+};
 }
 
 /**
