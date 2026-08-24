@@ -435,32 +435,85 @@ export async function adminUpdateTrade(input: {
     >
   >;
 }) {
-  const numericFields = ["quantity", "leverage", "marginUsed", "entryPrice", "currentPrice", "pnl"] as const;
+  const numericFields = [
+    "quantity",
+    "leverage",
+    "marginUsed",
+    "entryPrice",
+    "currentPrice",
+    "pnl",
+  ] as const;
+
   const patch: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(input.patch)) {
     if (value === undefined) continue;
-    if (numericFields.includes(key as (typeof numericFields)[number])) {
+
+    if (
+      numericFields.includes(
+        key as (typeof numericFields)[number],
+      )
+    ) {
       const numericValue = safeNumber(value, 0, 1e12);
+
       if (key !== "pnl" && numericValue < 0) {
         throw new Error(`${key} cannot be negative`);
       }
+
       patch[key] = numericValue;
       continue;
     }
+
     patch[key] = value;
   }
 
-  if (patch.status === "closed" && !patch.closedAt) {
-    patch.closedAt = Date.now();
-  }
+  const tradeRef = doc(tradesCol, input.tradeId);
+  const now = Date.now();
 
-  if (patch.status === "open") {
-    patch.closedAt = null;
-  }
+  await runTransaction(db, async (tx) => {
+    const tradeSnap = await tx.get(tradeRef);
 
-  await updateDoc(doc(tradesCol, input.tradeId), {
-    ...patch,
-    updatedAt: Date.now(),
+    if (!tradeSnap.exists()) {
+      throw new Error("Trade not found");
+    }
+
+    const oldTrade = {
+      id: tradeSnap.id,
+      ...(tradeSnap.data() as Omit<Trade, "id">),
+    } as Trade;
+
+    const oldStatus = oldTrade.status;
+    const newStatus =
+      (patch.status as Trade["status"] | undefined) ??
+      oldStatus;
+
+    /*
+     * IMPORTANT:
+     *
+     * Admin trade editing ONLY changes the trade document.
+     *
+     * Wallet balance / locked balance is NOT changed here.
+     *
+     * This prevents:
+     *
+     * Closed PNL 500 -> 1000
+     * from automatically adding +500 to wallet.
+     *
+     * Existing wallet settlement remains untouched when a
+     * trade is actually closed through closeTrade().
+     */
+
+    if (newStatus === "closed" && !patch.closedAt) {
+      patch.closedAt = oldTrade.closedAt ?? now;
+    }
+
+    if (newStatus === "open") {
+      patch.closedAt = null;
+    }
+
+    tx.update(tradeRef, {
+      ...patch,
+      updatedAt: now,
+    });
   });
 }

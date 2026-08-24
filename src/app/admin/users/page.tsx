@@ -818,7 +818,16 @@ function TradeEditorPanel({
           <summary className="cursor-pointer text-sm font-medium text-zinc-300">Closed trade history</summary>
           <div className="mt-3 grid gap-2">
             {closedTrades.slice(0, 12).map((trade) => (
-              <TradeSummaryCard key={trade.id} trade={trade} />
+              <TradeEditCard
+                key={trade.id}
+                trade={trade}
+                activeAction={activeAction}
+                pending={pending}
+                onSetActiveAction={onSetActiveAction}
+                onToast={onToast}
+                onTrade={onTrade}
+                onCloseTrade={onCloseTrade}
+              />
             ))}
           </div>
         </details>
@@ -946,16 +955,18 @@ function TradeEditCard({
           onClick={saveTrade}
           className="rounded-lg bg-emerald-500 px-4 py-3 text-sm font-bold text-zinc-950 disabled:opacity-60"
         >
-          {activeAction === `${trade.id}-trade` ? "Saving Trade..." : "Save Trade Changes"}
+          {activeAction === `${trade.id}-trade` ? "Saving Trade..." : trade.status === "closed" ? "Save Closed Trade Changes" : "Save Trade Changes"}
         </button>
-        <button
-          type="button"
-          disabled={pending}
-          onClick={closeRunningTrade}
-          className="rounded-lg border border-zinc-700 px-4 py-3 text-sm font-semibold text-zinc-200 hover:bg-zinc-800 disabled:opacity-60"
-        >
-          {activeAction === `${trade.id}-close` ? "Closing..." : "Close With Wallet Settlement"}
-        </button>
+        {trade.status === "open" ? (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={closeRunningTrade}
+            className="rounded-lg border border-zinc-700 px-4 py-3 text-sm font-semibold text-zinc-200 hover:bg-zinc-800 disabled:opacity-60"
+          >
+            {activeAction === `${trade.id}-close` ? "Closing..." : "Close With Wallet Settlement"}
+          </button>
+        ) : null}
       </div>
     </div>
   );
