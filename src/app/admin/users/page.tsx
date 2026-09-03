@@ -505,16 +505,16 @@ function DepositAccountEditor({
 
   const save = async () => {
     if (!adminId) return;
-    if (
-      !form.bankName.trim() ||
-      !form.accountHolderName.trim() ||
-      !form.accountNumber.trim() ||
-      !form.ifscCode.trim() ||
-      !form.qrCodeBase64
-    ) {
-      setError("Bank details and a QR / barcode are required.");
-      return;
-    }
+    // if (
+    //   !form.bankName.trim() ||
+    //   !form.accountHolderName.trim() ||
+    //   !form.accountNumber.trim() ||
+    //   !form.ifscCode.trim() ||
+    //   !form.qrCodeBase64
+    // ) {
+    //   setError("Bank details and a QR / barcode are required.");
+    //   return;
+    // }
 
     setMessage("");
     setError("");
