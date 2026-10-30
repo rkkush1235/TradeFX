@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { useMemo, useState } from "react";
 import { MarketSnapshot } from "@/types";
 import type { Trade } from "@/types";
-import { formatCurrency, formatPercent, safeNumber } from "@/utils/format";
+import { formatCurrency, formatPercent, safeNumber, formatPrice, formatPnl } from "@/utils/format";
 import { useAppStore } from "@/store/useAppStore";
 import { useAuth } from "@/hooks/useAuth";
 import { usePlaceTrade, useTrades, useWallet } from "@/hooks/useTrading";
@@ -21,12 +21,12 @@ function mapToTradingViewSymbol(symbol: string, category?: "forex" | "crypto" | 
 
   const normalized = normalizeSymbol(clean);
   const known: Record<string, string> = {
-    BTC: "BINANCE:BTCUSDT",
-    ETH: "BINANCE:ETHUSDT",
-    SOL: "BINANCE:SOLUSDT",
-    BNB: "BINANCE:BNBUSDT",
-    XRP: "BINANCE:XRPUSDT",
-    DOGE: "BINANCE:DOGEUSDT",
+    BTC: "KRAKEN:BTCUSD",
+    ETH: "KRAKEN:ETHUSD",
+    SOL: "KRAKEN:SOLUSD",
+    BNB: "KRAKEN:BNBUSD",
+    XRP: "KRAKEN:XRPUSD",
+    DOGE: "KRAKEN:DOGEUSD",
     EURUSD: "FX:EURUSD",
     GBPUSD: "FX:GBPUSD",
     USDJPY: "FX:USDJPY",
@@ -236,7 +236,7 @@ export function MarketCards({ snapshot }: { snapshot: MarketSnapshot }) {
             transition={{ delay: idx * 0.03 }}
           >
             <p className="text-xs text-zinc-400">{item.symbol}</p>
-            <h3 className="mt-2 text-lg font-semibold">{formatCurrency(safeNumber(item.priceUsd))}</h3>
+            <h3 className="mt-2 text-lg font-semibold">{formatPrice(item.priceUsd)}</h3>
             <p className={`mt-1 text-xs ${up ? "badge-up" : "badge-down"}`}>
               {formatPercent(safeNumber(item.change24h))}
             </p>
@@ -313,7 +313,7 @@ export function MarketCards({ snapshot }: { snapshot: MarketSnapshot }) {
                   return (
                     <div key={trade.id} className="flex items-center justify-between">
                       <span>{trade.type.toUpperCase()} • Qty {safeNumber(trade.quantity, 0, 1e6).toFixed(6)}</span>
-                      <span className={pnl >= 0 ? "text-emerald-400" : "text-red-400"}>P/L {formatCurrency(pnl)}</span>
+                      <span className={pnl >= 0 ? "text-emerald-400" : "text-red-400"}>P/L {formatPnl(pnl)}</span>
                     </div>
                   );
                 })}
@@ -322,13 +322,13 @@ export function MarketCards({ snapshot }: { snapshot: MarketSnapshot }) {
 
             <div className="grid gap-2 sm:grid-cols-3">
               <p className="rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-300">
-                LTP: {draftPrice > 0 ? formatCurrency(draftPrice) : "--"}
+                LTP: {draftPrice > 0 ? formatPrice(draftPrice) : "--"}
               </p>
               <p className="rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-300">
                 Position: {activePositionState}
               </p>
               <p className="rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-300">
-                Live P/L: <span className={activePnl >= 0 ? "badge-up" : "badge-down"}>{formatCurrency(activePnl)}</span>
+                Live P/L: <span className={activePnl >= 0 ? "badge-up" : "badge-down"}>{formatPnl(activePnl)}</span>
               </p>
             </div>
 
@@ -340,7 +340,7 @@ export function MarketCards({ snapshot }: { snapshot: MarketSnapshot }) {
 
             <div className="space-y-2 rounded-lg border border-zinc-700 bg-zinc-900/60 p-2">
               <p className="text-xs text-zinc-400">Leverage</p>
-              <div className="flex gap-2 overflow-x-auto pb-1">
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
                 {LEVERAGE_OPTIONS.map((value) => (
                   <button
                     key={value}

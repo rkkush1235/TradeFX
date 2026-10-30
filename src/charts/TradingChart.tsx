@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useMarketData } from "@/hooks/useMarketData";
 import { useAppStore } from "@/store/useAppStore";
-import { formatCurrency, formatPercent, safeNumber } from "@/utils/format";
+import { formatPercent, safeNumber, formatPrice } from "@/utils/format";
 
 function normalizeSymbol(symbol: string) {
   return symbol.replace(/\//g, "").trim().toUpperCase();
@@ -15,12 +15,12 @@ function mapToTradingViewSymbol(symbol: string, category?: "forex" | "crypto" | 
 
   const normalized = normalizeSymbol(clean);
   const known: Record<string, string> = {
-    BTC: "BINANCE:BTCUSDT",
-    ETH: "BINANCE:ETHUSDT",
-    SOL: "BINANCE:SOLUSDT",
-    BNB: "BINANCE:BNBUSDT",
-    XRP: "BINANCE:XRPUSDT",
-    DOGE: "BINANCE:DOGEUSDT",
+    BTC: "KRAKEN:BTCUSD",
+    ETH: "KRAKEN:ETHUSD",
+    SOL: "KRAKEN:SOLUSD",
+    BNB: "KRAKEN:BNBUSD",
+    XRP: "KRAKEN:XRPUSD",
+    DOGE: "KRAKEN:DOGEUSD",
     EURUSD: "FX:EURUSD",
     GBPUSD: "FX:GBPUSD",
     USDJPY: "FX:USDJPY",
@@ -100,7 +100,7 @@ export function TradingChart() {
         </div>
         <div className="text-right">
           <p className="text-lg font-semibold text-zinc-100">
-            {cardPriceUsd > 0 ? formatCurrency(cardPriceUsd) : "--"}
+            {cardPriceUsd > 0 ? formatPrice(cardPriceUsd) : "--"}
           </p>
           <p className={`text-xs ${cardChange >= 0 ? "text-emerald-400" : "text-red-400"}`}>
             {formatPercent(cardChange)}

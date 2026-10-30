@@ -30,14 +30,14 @@ function normalizeUsdPrice(symbol: string, raw: unknown) {
   const key = symbol.toUpperCase();
 
   const ranges: Record<string, { min: number; max: number }> = {
-    BTC: { min: 10_000, max: 200_000 },
-    ETH: { min: 100, max: 20_000 },
-    SOL: { min: 1, max: 5_000 },
-    BNB: { min: 10, max: 10_000 },
-    XRP: { min: 0.01, max: 20 },
-    DOGE: { min: 0.001, max: 5 },
-    GOLD: { min: 1_000, max: 10_000 },
-    SILVER: { min: 1, max: 1_000 },
+    BTC: { min: 1_000, max: 10_000_000 },
+    ETH: { min: 10, max: 1_000_000 },
+    SOL: { min: 0.1, max: 100_000 },
+    BNB: { min: 1, max: 100_000 },
+    XRP: { min: 0.001, max: 1_000 },
+    DOGE: { min: 0.0001, max: 100 },
+    GOLD: { min: 500, max: 50_000 },
+    SILVER: { min: 1, max: 5_000 },
     "EUR/USD": { min: 0.1, max: 5 },
     "GBP/USD": { min: 0.1, max: 5 },
     "USD/JPY": { min: 10, max: 500 },
@@ -56,34 +56,6 @@ function deriveChange(current: unknown, previous?: unknown) {
   const prev = safeNumber(previous);
   if (curr <= 0 || prev <= 0) return 0;
   return safeNumber(((curr - prev) / prev) * 100, 0, 10_000);
-}
-
-async function fetchUsdRate(base: string, quote: string): Promise<number> {
-  try {
-    const res = await fetch(
-      `https://api.exchangerate.host/convert?from=${base}&to=${quote}`,
-      { cache: "no-store" },
-    );
-    if (res.ok) {
-      const json = (await res.json()) as { result?: number };
-      if (isValidPrice(json?.result)) return Number(json.result);
-    }
-  } catch {
-    return 0;
-  }
-
-  const fallbackRes = await fetch(`https://open.er-api.com/v6/latest/${base}`, {
-    cache: "no-store",
-  });
-  if (!fallbackRes.ok) {
-    throw new Error(`rate api failed: ${fallbackRes.status}`);
-  }
-  const fallbackJson = (await fallbackRes.json()) as { rates?: Record<string, number> };
-  const rate = fallbackJson?.rates?.[quote];
-  if (!isValidPrice(rate)) {
-    throw new Error(`invalid rate for ${base}/${quote}`);
-  }
-  return Number(rate);
 }
 
 async function fetchCryptoPrices() {
@@ -112,11 +84,11 @@ async function fetchCryptoPrices() {
   } catch {
     const [priceRes, statRes] = await Promise.all([
       fetch(
-        "https://api.binance.com/api/v3/ticker/price?symbols=%5B%22BTCUSDT%22,%22ETHUSDT%22,%22SOLUSDT%22,%22BNBUSDT%22,%22XRPUSDT%22,%22DOGEUSDT%22%5D",
+        "https://data-api.binance.vision/api/v3/ticker/price?symbols=%5B%22BTCUSDT%22,%22ETHUSDT%22,%22SOLUSDT%22,%22BNBUSDT%22,%22XRPUSDT%22,%22DOGEUSDT%22%5D",
         { cache: "no-store" },
       ),
       fetch(
-        "https://api.binance.com/api/v3/ticker/24hr?symbols=%5B%22BTCUSDT%22,%22ETHUSDT%22,%22SOLUSDT%22,%22BNBUSDT%22,%22XRPUSDT%22,%22DOGEUSDT%22%5D",
+        "https://data-api.binance.vision/api/v3/ticker/24hr?symbols=%5B%22BTCUSDT%22,%22ETHUSDT%22,%22SOLUSDT%22,%22BNBUSDT%22,%22XRPUSDT%22,%22DOGEUSDT%22%5D",
         { cache: "no-store" },
       ),
     ]);
@@ -138,101 +110,114 @@ async function fetchCryptoPrices() {
   }
 }
 
-async function fetchForexPrice(symbol: "EUR/USD" | "GBP/USD" | "USD/JPY" | "AUD/USD" | "USD/CAD") {
-  try {
-    const [base, quote] = symbol.split("/");
-    const price = await fetchUsdRate(base, quote);
-    return normalizeUsdPrice(symbol, price);
-  } catch {
-    return 0;
+type ForexPair = "EUR/USD" | "GBP/USD" | "USD/JPY" | "AUD/USD" | "USD/CAD";
+
+const FOREX_PAIRS: ForexPair[] = ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD", "USD/CAD"];
+// Reference rates only publish once per business day, so polling faster just burns requests.
+const FOREX_CACHE_MS = 10 * 60_000;
+
+let forexCache: { prices: Record<string, MarketPrice>; fetchedAt: number } | null = null;
+let forexRequest: Promise<Record<string, MarketPrice>> | null = null;
+
+function pairFromUsdRates(pair: ForexPair, rates: Record<string, number>) {
+  const [base, quote] = pair.split("/");
+  const foreign = base === "USD" ? quote : base;
+  const rate = rates[foreign];
+  if (!isValidPrice(rate)) return 0;
+  // Rates are quoted per 1 USD; invert for XXX/USD pairs.
+  return normalizeUsdPrice(pair, base === "USD" ? rate : 1 / rate);
+}
+
+async function requestForexPrices(): Promise<Record<string, MarketPrice>> {
+  const start = new Date(Date.now() - 10 * 86_400_000).toISOString().slice(0, 10);
+  const res = await fetch(
+    `https://api.frankfurter.dev/v2/rates?base=USD&quotes=EUR,GBP,JPY,AUD,CAD&from=${start}`,
+    { cache: "no-store" },
+  );
+  if (!res.ok) throw new Error(`forex api failed: ${res.status}`);
+
+  const rows = (await res.json()) as Array<{ date: string; quote: string; rate: number }>;
+  const byDay = new Map<string, Record<string, number>>();
+  for (const row of rows) {
+    byDay.set(row.date, { ...byDay.get(row.date), [row.quote]: row.rate });
   }
+  const days = Array.from(byDay.keys()).sort();
+  if (!days.length) throw new Error("forex api returned no rates");
+
+  const latest = byDay.get(days[days.length - 1])!;
+  const previous = days.length > 1 ? byDay.get(days[days.length - 2]) : undefined;
+  const now = Date.now();
+
+  return Object.fromEntries(
+    FOREX_PAIRS.map((pair) => {
+      const priceUsd = pairFromUsdRates(pair, latest);
+      const prevPrice = previous ? pairFromUsdRates(pair, previous) : 0;
+      return [
+        pair,
+        {
+          symbol: pair,
+          category: "forex",
+          priceUsd,
+          change24h: deriveChange(priceUsd, prevPrice),
+          updatedAt: now,
+        } satisfies MarketPrice,
+      ];
+    }),
+  );
 }
 
 export async function fetchLiveForexPrices(previous?: MarketSnapshot) {
-  const [eurUsd, gbpUsd, usdJpy, audUsd, usdCad] = await Promise.all([
-    fetchForexPrice("EUR/USD"),
-    fetchForexPrice("GBP/USD"),
-    fetchForexPrice("USD/JPY"),
-    fetchForexPrice("AUD/USD"),
-    fetchForexPrice("USD/CAD"),
-  ]);
-
   const now = Date.now();
-  const previousPrices = previous?.prices ?? {};
+  if (!forexCache || now - forexCache.fetchedAt > FOREX_CACHE_MS) {
+    forexRequest ??= requestForexPrices().finally(() => {
+      forexRequest = null;
+    });
+    try {
+      forexCache = { prices: await forexRequest, fetchedAt: now };
+    } catch {
+      if (!forexCache) {
+        // Keep whatever the caller already had rather than dropping prices to 0.
+        const fallback = Object.fromEntries(
+          FOREX_PAIRS.map((pair) => [pair, previous?.prices?.[pair]]).filter(([, row]) => row),
+        ) as Record<string, MarketPrice>;
+        return { prices: fallback, updatedAt: previous?.updatedAt ?? now };
+      }
+    }
+  }
 
-  const pickLiveOrPrevious = (symbol: string, current: unknown, prev?: unknown) => {
-    const next = normalizeUsdPrice(symbol, current);
-    if (next > 0) return next;
-    return normalizeUsdPrice(symbol, prev);
-  };
-
-  const eurUsdSafe = pickLiveOrPrevious("EUR/USD", eurUsd, previousPrices["EUR/USD"]?.priceUsd);
-  const gbpUsdSafe = pickLiveOrPrevious("GBP/USD", gbpUsd, previousPrices["GBP/USD"]?.priceUsd);
-  const usdJpySafe = pickLiveOrPrevious("USD/JPY", usdJpy, previousPrices["USD/JPY"]?.priceUsd);
-  const audUsdSafe = pickLiveOrPrevious("AUD/USD", audUsd, previousPrices["AUD/USD"]?.priceUsd);
-  const usdCadSafe = pickLiveOrPrevious("USD/CAD", usdCad, previousPrices["USD/CAD"]?.priceUsd);
-
-  const prices: Record<string, MarketPrice> = {
-    "EUR/USD": {
-      symbol: "EUR/USD",
-      category: "forex",
-      priceUsd: eurUsdSafe,
-      change24h: deriveChange(eurUsdSafe, previousPrices["EUR/USD"]?.priceUsd),
-      updatedAt: now,
-    },
-    "GBP/USD": {
-      symbol: "GBP/USD",
-      category: "forex",
-      priceUsd: gbpUsdSafe,
-      change24h: deriveChange(gbpUsdSafe, previousPrices["GBP/USD"]?.priceUsd),
-      updatedAt: now,
-    },
-    "USD/JPY": {
-      symbol: "USD/JPY",
-      category: "forex",
-      priceUsd: usdJpySafe,
-      change24h: deriveChange(usdJpySafe, previousPrices["USD/JPY"]?.priceUsd),
-      updatedAt: now,
-    },
-    "AUD/USD": {
-      symbol: "AUD/USD",
-      category: "forex",
-      priceUsd: audUsdSafe,
-      change24h: deriveChange(audUsdSafe, previousPrices["AUD/USD"]?.priceUsd),
-      updatedAt: now,
-    },
-    "USD/CAD": {
-      symbol: "USD/CAD",
-      category: "forex",
-      priceUsd: usdCadSafe,
-      change24h: deriveChange(usdCadSafe, previousPrices["USD/CAD"]?.priceUsd),
-      updatedAt: now,
-    },
-  };
-
-  return { prices, updatedAt: now };
+  return { prices: forexCache.prices, updatedAt: forexCache.fetchedAt };
 }
 
+// gold-api.com: free spot XAU/XAG, no key and no call limit. It has no 24h change; the feed
+// takes GOLD's change from Kraken PAXG instead.
 async function fetchMetalPrice(symbol: "GOLD" | "SILVER") {
-  const futuresSymbol = symbol === "GOLD" ? "XAUUSDT" : "XAGUSDT";
+  const code = symbol === "GOLD" ? "XAU" : "XAG";
 
   try {
-    const res = await fetch(
-      `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${futuresSymbol}`,
-      { cache: "no-store" },
-    );
-    if (!res.ok) throw new Error(`binance futures failed: ${res.status}`);
+    const res = await fetch(`https://api.gold-api.com/price/${code}`, { cache: "no-store" });
+    if (!res.ok) throw new Error(`gold-api failed: ${res.status}`);
 
-    const payload = (await res.json()) as { symbol?: string; price?: string };
-    const parsed = parseApiNumber(payload.price);
-    const normalized = normalizeUsdPrice(symbol, parsed);
+    const payload = (await res.json()) as { price?: number };
+    const normalized = normalizeUsdPrice(symbol, parseApiNumber(payload.price));
     if (!isValidPrice(normalized)) {
-      throw new Error(`invalid futures ${symbol} price`);
+      throw new Error(`invalid ${symbol} price`);
     }
-    return normalized;
+    return { price: normalized, change: Number.NaN };
   } catch {
-    return Number.NaN;
+    return { price: Number.NaN, change: Number.NaN };
   }
+}
+
+export async function fetchLiveMetalPrices(): Promise<Record<string, MarketPrice>> {
+  const [gold, silver] = await Promise.all([fetchMetalPrice("GOLD"), fetchMetalPrice("SILVER")]);
+  const now = Date.now();
+  const prices: Record<string, MarketPrice> = {};
+  for (const [symbol, row] of [["GOLD", gold], ["SILVER", silver]] as const) {
+    if (!isValidPrice(row.price)) continue;
+    prices[symbol] = { symbol, category: "metal", priceUsd: row.price, change24h: 0, updatedAt: now };
+  }
+  if (!Object.keys(prices).length) throw new Error("metal prices unavailable");
+  return prices;
 }
 
 async function upsertMinuteCandle(symbol: string, priceUsd: number, nowMs: number) {
@@ -269,13 +254,9 @@ async function upsertMinuteCandle(symbol: string, priceUsd: number, nowMs: numbe
 }
 
 async function buildLiveSnapshot(): Promise<MarketSnapshot> {
-  const [crypto, eurUsd, gbpUsd, usdJpy, audUsd, usdCad, gold, silver, previousSnapshot] = await Promise.all([
+  const [crypto, forex, gold, silver, previousSnapshot] = await Promise.all([
     fetchCryptoPrices(),
-    fetchForexPrice("EUR/USD"),
-    fetchForexPrice("GBP/USD"),
-    fetchForexPrice("USD/JPY"),
-    fetchForexPrice("AUD/USD"),
-    fetchForexPrice("USD/CAD"),
+    fetchLiveForexPrices(),
     fetchMetalPrice("GOLD"),
     fetchMetalPrice("SILVER"),
     getDoc(doc(db, "marketPrices", "latest")),
@@ -285,129 +266,51 @@ async function buildLiveSnapshot(): Promise<MarketSnapshot> {
   const previous = previousSnapshot.data() as MarketSnapshot | undefined;
   const previousPrices = previous?.prices ?? {};
 
-  const resolveMetalPrice = (symbol: "GOLD" | "SILVER", current: unknown, prev?: unknown) => {
-    const normalizedCurrent = normalizeUsdPrice(symbol, current);
-    if (isValidPrice(normalizedCurrent)) return normalizedCurrent;
-
-    const normalizedPrevious = normalizeUsdPrice(symbol, prev);
-    if (isValidPrice(normalizedPrevious)) return normalizedPrevious;
-
-    throw new Error(`Live ${symbol} price unavailable`);
-  };
-
   const pickLiveOrPrevious = (symbol: string, current: unknown, prev?: unknown) => {
     const next = normalizeUsdPrice(symbol, current);
     if (next > 0) return next;
     return normalizeUsdPrice(symbol, prev);
   };
 
-  const eurUsdSafe = pickLiveOrPrevious("EUR/USD", eurUsd, previousPrices["EUR/USD"]?.priceUsd);
-  const gbpUsdSafe = pickLiveOrPrevious("GBP/USD", gbpUsd, previousPrices["GBP/USD"]?.priceUsd);
-  const usdJpySafe = pickLiveOrPrevious("USD/JPY", usdJpy, previousPrices["USD/JPY"]?.priceUsd);
-  const audUsdSafe = pickLiveOrPrevious("AUD/USD", audUsd, previousPrices["AUD/USD"]?.priceUsd);
-  const usdCadSafe = pickLiveOrPrevious("USD/CAD", usdCad, previousPrices["USD/CAD"]?.priceUsd);
-  const btcSafe = pickLiveOrPrevious("BTC", crypto.bitcoin?.usd, previousPrices.BTC?.priceUsd);
-  const ethSafe = pickLiveOrPrevious("ETH", crypto.ethereum?.usd, previousPrices.ETH?.priceUsd);
-  const solSafe = pickLiveOrPrevious("SOL", crypto.solana?.usd, previousPrices.SOL?.priceUsd);
-  const bnbSafe = pickLiveOrPrevious("BNB", crypto.binancecoin?.usd, previousPrices.BNB?.priceUsd);
-  const xrpSafe = pickLiveOrPrevious("XRP", crypto.ripple?.usd, previousPrices.XRP?.priceUsd);
-  const dogeSafe = pickLiveOrPrevious("DOGE", crypto.dogecoin?.usd, previousPrices.DOGE?.priceUsd);
-  const goldSafe = resolveMetalPrice("GOLD", gold, previousPrices.GOLD?.priceUsd);
-  const silverSafe = resolveMetalPrice("SILVER", silver, previousPrices.SILVER?.priceUsd);
+  const prices: Record<string, MarketPrice> = {};
 
-  const prices: Record<string, MarketPrice> = {
-    "EUR/USD": {
-      symbol: "EUR/USD",
-      category: "forex",
-      priceUsd: eurUsdSafe,
-      change24h: deriveChange(eurUsdSafe, previousPrices["EUR/USD"]?.priceUsd),
-      updatedAt: now,
-    },
-    "GBP/USD": {
-      symbol: "GBP/USD",
-      category: "forex",
-      priceUsd: gbpUsdSafe,
-      change24h: deriveChange(gbpUsdSafe, previousPrices["GBP/USD"]?.priceUsd),
-      updatedAt: now,
-    },
-    "USD/JPY": {
-      symbol: "USD/JPY",
-      category: "forex",
-      priceUsd: usdJpySafe,
-      change24h: deriveChange(usdJpySafe, previousPrices["USD/JPY"]?.priceUsd),
-      updatedAt: now,
-    },
-    "AUD/USD": {
-      symbol: "AUD/USD",
-      category: "forex",
-      priceUsd: audUsdSafe,
-      change24h: deriveChange(audUsdSafe, previousPrices["AUD/USD"]?.priceUsd),
-      updatedAt: now,
-    },
-    "USD/CAD": {
-      symbol: "USD/CAD",
-      category: "forex",
-      priceUsd: usdCadSafe,
-      change24h: deriveChange(usdCadSafe, previousPrices["USD/CAD"]?.priceUsd),
-      updatedAt: now,
-    },
-    BTC: {
-      symbol: "BTC",
+  for (const [symbol, row] of Object.entries(forex.prices)) {
+    prices[symbol] = {
+      ...row,
+      priceUsd: pickLiveOrPrevious(symbol, row.priceUsd, previousPrices[symbol]?.priceUsd),
+    };
+  }
+
+  const cryptoRows: Array<[string, { usd: number; usd_24h_change: number } | undefined]> = [
+    ["BTC", crypto.bitcoin],
+    ["ETH", crypto.ethereum],
+    ["SOL", crypto.solana],
+    ["BNB", crypto.binancecoin],
+    ["XRP", crypto.ripple],
+    ["DOGE", crypto.dogecoin],
+  ];
+  for (const [symbol, row] of cryptoRows) {
+    prices[symbol] = {
+      symbol,
       category: "crypto",
-      priceUsd: btcSafe,
-      change24h: safeNumber(crypto.bitcoin?.usd_24h_change ?? deriveChange(btcSafe, previousPrices.BTC?.priceUsd)),
+      priceUsd: pickLiveOrPrevious(symbol, row?.usd, previousPrices[symbol]?.priceUsd),
+      change24h: safeNumber(row?.usd_24h_change ?? previousPrices[symbol]?.change24h),
       updatedAt: now,
-    },
-    ETH: {
-      symbol: "ETH",
-      category: "crypto",
-      priceUsd: ethSafe,
-      change24h: safeNumber(crypto.ethereum?.usd_24h_change ?? deriveChange(ethSafe, previousPrices.ETH?.priceUsd)),
-      updatedAt: now,
-    },
-    SOL: {
-      symbol: "SOL",
-      category: "crypto",
-      priceUsd: solSafe,
-      change24h: safeNumber(crypto.solana?.usd_24h_change ?? deriveChange(solSafe, previousPrices.SOL?.priceUsd)),
-      updatedAt: now,
-    },
-    BNB: {
-      symbol: "BNB",
-      category: "crypto",
-      priceUsd: bnbSafe,
-      change24h: safeNumber(crypto.binancecoin?.usd_24h_change ?? deriveChange(bnbSafe, previousPrices.BNB?.priceUsd)),
-      updatedAt: now,
-    },
-    XRP: {
-      symbol: "XRP",
-      category: "crypto",
-      priceUsd: xrpSafe,
-      change24h: safeNumber(crypto.ripple?.usd_24h_change ?? deriveChange(xrpSafe, previousPrices.XRP?.priceUsd)),
-      updatedAt: now,
-    },
-    DOGE: {
-      symbol: "DOGE",
-      category: "crypto",
-      priceUsd: dogeSafe,
-      change24h: safeNumber(crypto.dogecoin?.usd_24h_change ?? deriveChange(dogeSafe, previousPrices.DOGE?.priceUsd)),
-      updatedAt: now,
-    },
-    GOLD: {
-      symbol: "GOLD",
+    };
+  }
+
+  for (const [symbol, row] of [["GOLD", gold], ["SILVER", silver]] as const) {
+    const priceUsd = pickLiveOrPrevious(symbol, row.price, previousPrices[symbol]?.priceUsd);
+    // One missing metal must not sink the whole snapshot (and every other price with it).
+    if (!isValidPrice(priceUsd)) continue;
+    prices[symbol] = {
+      symbol,
       category: "metal",
-      priceUsd: goldSafe,
-      change24h: deriveChange(goldSafe, previousPrices.GOLD?.priceUsd),
+      priceUsd,
+      change24h: Number.isFinite(row.change) ? row.change : safeNumber(previousPrices[symbol]?.change24h),
       updatedAt: now,
-    },
-    SILVER: {
-      symbol: "SILVER",
-      category: "metal",
-      priceUsd: silverSafe,
-      change24h: deriveChange(silverSafe, previousPrices.SILVER?.priceUsd),
-      updatedAt: now,
-    },
-  };
+    };
+  }
 
   return {
     prices,

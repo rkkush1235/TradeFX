@@ -12,7 +12,7 @@ import { useUserDepositAccount, useSaveUserDepositAccount } from "@/hooks/useBan
 import { imageFileToCompressedBase64 } from "@/utils/imageBase64";
 import { useAdminUpdateTrade, useCloseTrade, useTrades } from "@/hooks/useTrading";
 import { AppUser, Trade, UserStatus, WithdrawalRequest } from "@/types";
-import { cn, formatCurrency, safeNumber } from "@/utils/format";
+import { cn, formatCurrency, safeNumber, formatPrice, formatPnl } from "@/utils/format";
 
 type ToastState = { type: "success" | "error"; message: string } | null;
 type KycCheckState = {
@@ -892,7 +892,7 @@ function TradeEditCard({
         <div>
           <p className="font-medium">{trade.asset}</p>
           <p className="text-xs text-zinc-400">
-            {trade.type.toUpperCase()} • Qty {safeNumber(trade.quantity).toFixed(4)} • PnL {formatCurrency(trade.pnl)}
+            {trade.type.toUpperCase()} • Qty {safeNumber(trade.quantity).toFixed(4)} • PnL {formatPnl(trade.pnl)}
           </p>
         </div>
         <span className="rounded-md border border-emerald-500/40 px-2 py-1 text-xs uppercase text-emerald-300">
@@ -932,7 +932,7 @@ function TradeEditCard({
         </label>
         <div className="rounded-lg border border-zinc-700 bg-zinc-950/40 p-2 text-xs">
           <p className="text-zinc-400">Preview PnL</p>
-          <p className={previewPnl >= 0 ? "text-emerald-300" : "text-red-300"}>{formatCurrency(previewPnl)}</p>
+          <p className={previewPnl >= 0 ? "text-emerald-300" : "text-red-300"}>{formatPnl(previewPnl)}</p>
         </div>
       </div>
 
@@ -964,11 +964,11 @@ function TradeSummaryCard({ trade }: { trade: Trade }) {
       <div>
         <p className="font-medium">{trade.asset} • {trade.type.toUpperCase()}</p>
         <p className="text-xs text-zinc-400">
-          Qty {safeNumber(trade.quantity).toFixed(4)} • Entry {formatCurrency(trade.entryPrice)} • Close {formatCurrency(trade.currentPrice)}
+          Qty {safeNumber(trade.quantity).toFixed(4)} • Entry {formatPrice(trade.entryPrice)} • Close {formatPrice(trade.currentPrice)}
         </p>
       </div>
       <span className={cn("text-xs", safeNumber(trade.pnl) >= 0 ? "text-emerald-300" : "text-red-300")}>
-        {formatCurrency(trade.pnl)}
+        {formatPnl(trade.pnl)}
       </span>
     </div>
   );

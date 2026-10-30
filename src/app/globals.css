@@ -30,6 +30,14 @@ body {
   border-radius: 14px;
 }
 
+/* Blurring every card is expensive on low-end phone GPUs; use a solid panel there instead. */
+@media (max-width: 767px) {
+  .glass {
+    backdrop-filter: none;
+    background: rgba(12, 17, 29, 0.96);
+  }
+}
+
 .badge-up {
   color: var(--green);
 }

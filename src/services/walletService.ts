@@ -213,17 +213,18 @@ export function subscribeAssignedWithdrawals(adminId: string, onData: (rows: Wit
 function subscribeAssignedPaymentRows<T extends DepositRequest | WithdrawalRequest>(adminId: string, kind: "deposits" | "withdrawals", onData: (rows: T[]) => void, onError?: (error: unknown) => void) {
   const userQuery = query(usersCol, where("assignedAdminId", "==", adminId));
   let childUnsubs: Array<() => void> = [];
-  let rows = new Map<string, T>();
+  // Keyed per user so each snapshot replaces that user's rows and deletions drop out.
+  let rowsByUser = new Map<string, T[]>();
   let stopped = false;
   const unsubUsers = onSnapshot(userQuery, (usersSnap) => {
-    childUnsubs.forEach((u) => u()); childUnsubs = []; rows = new Map();
+    childUnsubs.forEach((u) => u()); childUnsubs = []; rowsByUser = new Map();
     usersSnap.docs
       .filter((userDoc) => normalizeRole(userDoc.data().role) === "user" && !userDoc.data().deleted)
       .forEach((userDoc) => {
       const q = query(collection(db, kind), where("userId", "==", userDoc.id), orderBy("createdAt", "desc"));
       childUnsubs.push(onSnapshot(q, (snap) => {
-        snap.docs.forEach((d) => rows.set(d.id, { id: d.id, ...(d.data() as Omit<T, "id">) } as T));
-        if (!stopped) onData(Array.from(rows.values()).sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)));
+        rowsByUser.set(userDoc.id, snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<T, "id">) } as T)));
+        if (!stopped) onData(Array.from(rowsByUser.values()).flat().sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)));
       }, onError));
     });
     if (!usersSnap.size) onData([]);

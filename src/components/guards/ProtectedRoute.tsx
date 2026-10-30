@@ -16,7 +16,7 @@ export function ProtectedRoute({
   const { firebaseUser, appUser, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const { data: appSettings } = useAppSettings();
+  const { data: appSettings } = useAppSettings(Boolean(firebaseUser));
 
   const role = normalizeRole(appUser?.role);
   const isSuperAdminRoute = pathname.startsWith("/super-admin");

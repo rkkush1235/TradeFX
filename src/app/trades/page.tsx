@@ -14,9 +14,15 @@ export default function TradesPage() {
 
   return (
     <AppShell title="Position">
+      {closeTrade.error ? (
+        <p className="glass mb-3 border-red-500/40 p-3 text-sm text-red-300">
+          Could not close position:{closeTrade.error instanceof Error ? closeTrade.error.message : "Unknown error"}
+        </p>
+      ) : null}
       <TradesTable
         trades={trades}
         priceMap={market.prices}
+        closingTradeId={closeTrade.isPending ? closeTrade.variables?.id : undefined}
         onClose={(trade) => closeTrade.mutate(trade)}
       />
     </AppShell>

@@ -1,53 +1,61 @@
-import { emptySnapshot, fetchLiveForexPrices, fetchLiveMarketSnapshot } from "@/services/marketService";
+import {
+  emptySnapshot,
+  fetchLiveForexPrices,
+  fetchLiveMarketSnapshot,
+  fetchLiveMetalPrices,
+} from "@/services/marketService";
 import { MarketPrice, MarketSnapshot } from "@/types";
-import { POLL_INTERVAL_MS } from "@/utils/constants";
 
 type Listener = (snapshot: MarketSnapshot) => void;
 
 let snapshotCache: MarketSnapshot = emptySnapshot();
 const listeners = new Set<Listener>();
 let forexTimer: ReturnType<typeof setInterval> | null = null;
+let metalTimer: ReturnType<typeof setInterval> | null = null;
 let forexInFlight = false;
-let socket: WebSocket | null = null;
-let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-let reconnectAttempts = 0;
+let metalInFlight = false;
 let started = false;
 let bootstrapped = false;
+let notifyTimer: ReturnType<typeof setTimeout> | null = null;
 
-const BINANCE_FUTURES_STREAMS = [
-  "btcusdt@ticker",
-  "ethusdt@ticker",
-  "bnbusdt@ticker",
-  "xrpusdt@ticker",
-  "dogeusdt@ticker",
-  "solusdt@ticker",
-  "xauusdt@ticker",
-  "xagusdt@ticker",
-] as const;
+// Kraken pushes many ticks per second; batching keeps mobile renders down to a few per second.
+const NOTIFY_THROTTLE_MS = 500;
+// Forex reference rates are cached for minutes in marketService, so poll slowly.
+const FOREX_POLL_MS = 60_000;
+// gold-api.com spot metals refresh every few seconds and need no key.
+const METAL_POLL_MS = 15_000;
 
-const BINANCE_FUTURES_SYMBOLS = [
-  "BTCUSDT",
-  "ETHUSDT",
-  "BNBUSDT",
-  "XRPUSDT",
-  "DOGEUSDT",
-  "SOLUSDT",
-  "XAUUSDT",
-  "XAGUSDT",
-] as const;
-
-const BINANCE_COMBINED_STREAM_URL = `wss://fstream.binance.com/stream?streams=${BINANCE_FUTURES_STREAMS.join("/")}`;
-
-const FUTURES_SYMBOL_TO_ASSET: Record<string, string> = {
-  BTCUSDT: "BTC",
-  ETHUSDT: "ETH",
-  BNBUSDT: "BNB",
-  XRPUSDT: "XRP",
-  DOGEUSDT: "DOGE",
-  SOLUSDT: "SOL",
-  XAUUSDT: "GOLD",
-  XAGUSDT: "SILVER",
+// Live forex and crypto come from Kraken's public feed (no key, no call limits, reachable where
+// Binance is blocked, e.g. India). ECB rates are the forex backup.
+const KRAKEN_WS_URL = "wss://ws.kraken.com/v2";
+const KRAKEN_SYMBOLS: Record<string, { asset: string; category: MarketPrice["category"] }> = {
+  "EUR/USD": { asset: "EUR/USD", category: "forex" },
+  "GBP/USD": { asset: "GBP/USD", category: "forex" },
+  "AUD/USD": { asset: "AUD/USD", category: "forex" },
+  "USD/JPY": { asset: "USD/JPY", category: "forex" },
+  "USD/CAD": { asset: "USD/CAD", category: "forex" },
+  "BTC/USD": { asset: "BTC", category: "crypto" },
+  "ETH/USD": { asset: "ETH", category: "crypto" },
+  "SOL/USD": { asset: "SOL", category: "crypto" },
+  "BNB/USD": { asset: "BNB", category: "crypto" },
+  "XRP/USD": { asset: "XRP", category: "crypto" },
+  "DOGE/USD": { asset: "DOGE", category: "crypto" },
 };
+// PAXG is a gold-backed token; only its 24h change is used, for GOLD (gold-api has no change).
+const KRAKEN_GOLD_PROXY = "PAXG/USD";
+// After this long without a Kraken tick, the ECB rate is allowed to fill that pair.
+const KRAKEN_STALE_MS = 5 * 60_000;
+// Above 0.1% spread the bid/ask mid is not trusted.
+const KRAKEN_MAX_SPREAD = 0.001;
+// Kraken forex ticks more than 1% away from the ECB reference are treated as bad prints.
+const KRAKEN_MAX_DEVIATION = 0.01;
+const ecbReference: Record<string, number> = {};
+
+let krakenSocket: WebSocket | null = null;
+let krakenReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let krakenReconnectAttempts = 0;
+const krakenUpdatedAt: Record<string, number> = {};
+let goldChangePercent = Number.NaN;
 
 function toFinitePositive(value: unknown) {
   const parsed = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
@@ -62,173 +70,158 @@ function toFiniteNumber(value: unknown) {
 }
 
 function notifyListeners() {
-  listeners.forEach((listener) => listener(snapshotCache));
+  if (notifyTimer) return;
+  notifyTimer = setTimeout(() => {
+    notifyTimer = null;
+    listeners.forEach((listener) => listener(snapshotCache));
+  }, NOTIFY_THROTTLE_MS);
 }
 
-function applyBinanceTickerUpdate(asset: string, lastPrice: number, changePercent: number) {
-  const now = Date.now();
-  const prev = snapshotCache.prices[asset];
-  const category: MarketPrice["category"] = asset === "GOLD" || asset === "SILVER" ? "metal" : "crypto";
-  const nextChange = Number.isFinite(changePercent) ? changePercent : (prev?.change24h ?? 0);
-
-  snapshotCache = {
-    ...snapshotCache,
-    updatedAt: now,
-    prices: {
-      ...snapshotCache.prices,
-      [asset]: {
-        symbol: asset,
-        category,
-        priceUsd: lastPrice,
-        change24h: nextChange,
-        updatedAt: now,
-      },
-    },
-  };
-
-  notifyListeners();
-}
-
-async function seedBinanceAssetsFromRest() {
-  try {
-    const encodedSymbols = encodeURIComponent(JSON.stringify(BINANCE_FUTURES_SYMBOLS));
-    const [priceRes, statsRes] = await Promise.all([
-      fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbols=${encodedSymbols}`, {
-        cache: "no-store",
-      }),
-      fetch(`https://fapi.binance.com/fapi/v1/ticker/24hr?symbols=${encodedSymbols}`, {
-        cache: "no-store",
-      }),
-    ]);
-
-    if (!priceRes.ok || !statsRes.ok) {
-      console.warn("[MarketFeed] Binance REST seed failed", {
-        priceStatus: priceRes.status,
-        statsStatus: statsRes.status,
-      });
-      return;
-    }
-
-    const prices = (await priceRes.json()) as Array<{ symbol?: string; price?: string }>;
-    const stats = (await statsRes.json()) as Array<{ symbol?: string; priceChangePercent?: string }>;
-
-    for (const row of prices) {
-      const symbol = String(row.symbol ?? "").toUpperCase();
-      const asset = FUTURES_SYMBOL_TO_ASSET[symbol];
-      if (!asset) continue;
-
-      const price = toFinitePositive(row.price);
-      if (!Number.isFinite(price)) continue;
-
-      const statRow = stats.find((stat) => String(stat.symbol ?? "").toUpperCase() === symbol);
-      const changePercent = toFiniteNumber(statRow?.priceChangePercent);
-      applyBinanceTickerUpdate(asset, price, changePercent);
-    }
-  } catch {
-    console.warn("[MarketFeed] Binance REST seed request failed");
-  }
-}
-
-function handleBinanceMessage(raw: unknown) {
+function handleKrakenMessage(raw: unknown) {
   if (typeof raw !== "string") return;
 
-  let parsed: unknown;
+  let parsed: { channel?: string; data?: Array<Record<string, unknown>> };
   try {
     parsed = JSON.parse(raw);
   } catch {
-    console.warn("[MarketFeed] Binance WS invalid JSON payload");
     return;
   }
+  if (parsed.channel !== "ticker" || !Array.isArray(parsed.data)) return;
 
-  const envelope = parsed as { data?: Record<string, unknown> };
-  const data = envelope?.data;
-  if (!data || typeof data !== "object") {
-    console.warn("[MarketFeed] Binance WS payload missing ticker data");
-    return;
+  const now = Date.now();
+  const prices = { ...snapshotCache.prices };
+  let changed = false;
+
+  for (const row of parsed.data) {
+    const symbol = typeof row.symbol === "string" ? row.symbol : "";
+
+    if (symbol === KRAKEN_GOLD_PROXY) {
+      goldChangePercent = toFiniteNumber(row.change_pct);
+      if (prices.GOLD && Number.isFinite(goldChangePercent)) {
+        prices.GOLD = { ...prices.GOLD, change24h: goldChangePercent };
+        changed = true;
+      }
+      continue;
+    }
+
+    const target = KRAKEN_SYMBOLS[symbol];
+    if (!target) continue;
+
+    // Mid of bid/ask tracks the market between trades, but Kraken's thinner books (USD/JPY) can
+    // have a spread of several percent; then the last trade is the honest price.
+    const bid = toFinitePositive(row.bid);
+    const ask = toFinitePositive(row.ask);
+    const last = toFinitePositive(row.last);
+    const tightBook = Number.isFinite(bid) && Number.isFinite(ask) && (ask - bid) / bid <= KRAKEN_MAX_SPREAD;
+    const price = tightBook ? (bid + ask) / 2 : last;
+    if (!Number.isFinite(price)) continue;
+
+    // A stale trade on an illiquid pair can sit far from the real market; leave the ECB rate then.
+    const reference = ecbReference[target.asset];
+    if (reference && Math.abs(price - reference) / reference > KRAKEN_MAX_DEVIATION) continue;
+
+    const changePercent = toFiniteNumber(row.change_pct);
+    krakenUpdatedAt[target.asset] = now;
+    prices[target.asset] = {
+      symbol: target.asset,
+      category: target.category,
+      priceUsd: price,
+      change24h: Number.isFinite(changePercent) ? changePercent : (prices[target.asset]?.change24h ?? 0),
+      updatedAt: now,
+    };
+    changed = true;
   }
 
-  const symbolRaw = data.s;
-  const symbol = typeof symbolRaw === "string" ? symbolRaw.toUpperCase() : "";
-  const asset = FUTURES_SYMBOL_TO_ASSET[symbol];
-  if (!asset) return;
-
-  const lastPrice = toFinitePositive(data.c);
-  if (!Number.isFinite(lastPrice)) {
-    console.warn("[MarketFeed] Binance WS invalid price", { symbol, payload: data });
-    return;
-  }
-
-  const changePercent = toFiniteNumber(data.P);
-  applyBinanceTickerUpdate(asset, lastPrice, changePercent);
+  if (!changed) return;
+  snapshotCache = { ...snapshotCache, updatedAt: now, prices };
+  notifyListeners();
 }
 
-function scheduleReconnect() {
-  if (reconnectTimer || listeners.size === 0) return;
+function scheduleKrakenReconnect() {
+  if (krakenReconnectTimer || listeners.size === 0) return;
 
-  const delay = Math.min(1_000 * 2 ** reconnectAttempts, 15_000);
-  reconnectAttempts += 1;
-  console.info("[MarketFeed] Binance WS reconnect scheduled", { delayMs: delay, attempt: reconnectAttempts });
+  const delay = Math.min(1_000 * 2 ** krakenReconnectAttempts, 30_000);
+  krakenReconnectAttempts += 1;
 
-  reconnectTimer = setTimeout(() => {
-    reconnectTimer = null;
-    startBinanceStream();
+  krakenReconnectTimer = setTimeout(() => {
+    krakenReconnectTimer = null;
+    startKrakenStream();
   }, delay);
 }
 
-function clearReconnectTimer() {
-  if (!reconnectTimer) return;
-  clearTimeout(reconnectTimer);
-  reconnectTimer = null;
-}
-
-function startBinanceStream() {
-  if (typeof WebSocket === "undefined") {
-    console.warn("[MarketFeed] WebSocket not available in current runtime");
+function startKrakenStream() {
+  if (typeof WebSocket === "undefined") return;
+  if (krakenSocket && (krakenSocket.readyState === WebSocket.OPEN || krakenSocket.readyState === WebSocket.CONNECTING)) {
     return;
   }
 
-  if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
-    return;
-  }
-
-  console.info("[MarketFeed] Binance WS connecting", { url: BINANCE_COMBINED_STREAM_URL });
-  const ws = new WebSocket(BINANCE_COMBINED_STREAM_URL);
-  socket = ws;
+  const ws = new WebSocket(KRAKEN_WS_URL);
+  krakenSocket = ws;
 
   ws.onopen = () => {
-    reconnectAttempts = 0;
-    console.info("[MarketFeed] Binance WS connected");
-    void seedBinanceAssetsFromRest();
+    krakenReconnectAttempts = 0;
+    ws.send(
+      JSON.stringify({
+        method: "subscribe",
+        params: {
+          channel: "ticker",
+          symbol: [...Object.keys(KRAKEN_SYMBOLS), KRAKEN_GOLD_PROXY],
+          event_trigger: "bbo",
+        },
+      }),
+    );
   };
 
   ws.onmessage = (event) => {
-    handleBinanceMessage(event.data);
+    handleKrakenMessage(event.data);
   };
 
   ws.onerror = () => {
-    console.warn("[MarketFeed] Binance WS error event received");
+    console.warn("[MarketFeed] Kraken WS error event received");
   };
 
-  ws.onclose = (event) => {
-    if (socket === ws) socket = null;
-    console.warn("[MarketFeed] Binance WS closed", { code: event.code, reason: event.reason });
+  ws.onclose = () => {
+    if (krakenSocket === ws) krakenSocket = null;
     if (!started || listeners.size === 0) return;
-    scheduleReconnect();
+    scheduleKrakenReconnect();
   };
 }
 
-function stopBinanceStream() {
-  clearReconnectTimer();
-  reconnectAttempts = 0;
+function stopKrakenStream() {
+  if (krakenReconnectTimer) {
+    clearTimeout(krakenReconnectTimer);
+    krakenReconnectTimer = null;
+  }
+  krakenReconnectAttempts = 0;
 
-  if (!socket) return;
+  if (!krakenSocket) return;
   try {
-    socket.close();
+    krakenSocket.close();
   } catch {
     return;
   } finally {
-    socket = null;
-    console.info("[MarketFeed] Binance WS cleaned up");
+    krakenSocket = null;
+  }
+}
+
+async function pollMetals() {
+  if (metalInFlight) return;
+  metalInFlight = true;
+
+  try {
+    const live = await fetchLiveMetalPrices();
+    const prices = { ...snapshotCache.prices };
+    for (const [symbol, row] of Object.entries(live)) {
+      const change =
+        symbol === "GOLD" && Number.isFinite(goldChangePercent) ? goldChangePercent : (prices[symbol]?.change24h ?? 0);
+      prices[symbol] = { ...row, change24h: change };
+    }
+    snapshotCache = { ...snapshotCache, updatedAt: Date.now(), prices };
+    notifyListeners();
+  } catch {
+    console.warn("[MarketFeed] Metal polling failed");
+  } finally {
+    metalInFlight = false;
   }
 }
 
@@ -238,12 +231,30 @@ async function pollForexSnapshot() {
 
   try {
     const live = await fetchLiveForexPrices(snapshotCache);
+    for (const [symbol, row] of Object.entries(live.prices)) {
+      if (row.priceUsd > 0) ecbReference[symbol] = row.priceUsd;
+    }
+    // ECB is only the backup: it fills pairs Kraken never sent, or when Kraken is down and stale.
+    // A quiet but connected Kraken (e.g. weekend) keeps its last live price.
+    const now = Date.now();
+    const krakenOpen = krakenSocket !== null && krakenSocket.readyState === krakenSocket.OPEN;
+    const fallbackRows = Object.fromEntries(
+      Object.entries(live.prices).filter(([symbol, row]) => {
+        const lastTick = krakenUpdatedAt[symbol];
+        const current = snapshotCache.prices[symbol]?.priceUsd ?? 0;
+        // Also replace a Kraken print that arrived before the reference and turned out to be off.
+        const offReference = row.priceUsd > 0 && Math.abs(current - row.priceUsd) / row.priceUsd > KRAKEN_MAX_DEVIATION;
+        return !lastTick || offReference || (!krakenOpen && now - lastTick > KRAKEN_STALE_MS);
+      }),
+    );
+    if (!Object.keys(fallbackRows).length) return;
+
     snapshotCache = {
       ...snapshotCache,
       updatedAt: Math.max(snapshotCache.updatedAt, live.updatedAt),
       prices: {
         ...snapshotCache.prices,
-        ...live.prices,
+        ...fallbackRows,
       },
     };
     notifyListeners();
@@ -259,8 +270,16 @@ async function bootstrapSnapshotOnce() {
   bootstrapped = true;
 
   try {
+    const startedAt = Date.now();
     const live = await fetchLiveMarketSnapshot();
-    snapshotCache = live;
+    // The WebSocket usually answers before this slower REST bootstrap; never let the older
+    // bootstrap values overwrite a price that streamed in while it was loading.
+    const merged = { ...snapshotCache.prices };
+    for (const [symbol, row] of Object.entries(live.prices)) {
+      const current = merged[symbol];
+      if (!current || current.priceUsd <= 0 || current.updatedAt < startedAt) merged[symbol] = row;
+    }
+    snapshotCache = { ...snapshotCache, prices: merged, updatedAt: Math.max(snapshotCache.updatedAt, live.updatedAt) };
     notifyListeners();
   } catch {
     console.warn("[MarketFeed] Initial market snapshot bootstrap failed");
@@ -272,22 +291,33 @@ function ensureFeedStarted() {
   started = true;
 
   void bootstrapSnapshotOnce();
-  startBinanceStream();
-  void seedBinanceAssetsFromRest();
+  startKrakenStream();
   void pollForexSnapshot();
-  forexTimer = setInterval(pollForexSnapshot, POLL_INTERVAL_MS);
+  void pollMetals();
+  forexTimer = setInterval(pollForexSnapshot, FOREX_POLL_MS);
+  metalTimer = setInterval(pollMetals, METAL_POLL_MS);
 }
 
 function maybeStopFeed() {
   if (listeners.size > 0) return;
   started = false;
 
+  if (notifyTimer) {
+    clearTimeout(notifyTimer);
+    notifyTimer = null;
+  }
+
   if (forexTimer) {
     clearInterval(forexTimer);
     forexTimer = null;
   }
 
-  stopBinanceStream();
+  if (metalTimer) {
+    clearInterval(metalTimer);
+    metalTimer = null;
+  }
+
+  stopKrakenStream();
 }
 
 export function subscribeMarketFeed(listener: Listener) {
@@ -306,6 +336,6 @@ export function getCurrentMarketSnapshot() {
 }
 
 export async function refreshMarketSnapshot() {
-  await pollForexSnapshot();
+  await Promise.all([pollForexSnapshot(), pollMetals()]);
   return snapshotCache;
 }

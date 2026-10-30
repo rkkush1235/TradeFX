@@ -470,15 +470,19 @@ export async function adminUpdateTrade(input: {
 export function subscribeAssignedTrades(adminId: string, onData: (rows: Trade[]) => void, onError?: (error: unknown) => void) {
   const userQuery = query(usersCol, where("assignedAdminId", "==", adminId), where("role", "==", "user"));
   let childUnsubs: Array<() => void> = [];
-  let rows = new Map<string, Trade>();
+  // Keyed per user so each snapshot replaces that user's trades and deletions drop out.
+  let rowsByUser = new Map<string, Trade[]>();
   let stopped = false;
+  const emit = () => {
+    if (!stopped) onData(Array.from(rowsByUser.values()).flat().sort((a, b) => b.timestamp - a.timestamp));
+  };
   const unsubUsers = onSnapshot(userQuery, (usersSnap) => {
-    childUnsubs.forEach((u) => u()); childUnsubs = []; rows = new Map();
+    childUnsubs.forEach((u) => u()); childUnsubs = []; rowsByUser = new Map();
     usersSnap.docs.forEach((userDoc) => {
       const q = query(tradesCol, where("userId", "==", userDoc.id));
       childUnsubs.push(onSnapshot(q, (snap) => {
-        snap.docs.forEach((d) => rows.set(d.id, { id: d.id, ...(d.data() as Omit<Trade, "id">) } as Trade));
-        if (!stopped) onData(Array.from(rows.values()).sort((a, b) => b.timestamp - a.timestamp));
+        rowsByUser.set(userDoc.id, snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Trade, "id">) } as Trade)));
+        emit();
       }, onError));
     });
     if (!usersSnap.size) onData([]);

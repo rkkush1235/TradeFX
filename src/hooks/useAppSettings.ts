@@ -13,9 +13,10 @@ const SETTINGS_DOC = "appSettings";
 const SETTINGS_COLLECTION = "config";
 
 // Fetch app settings (QR code, etc.)
-export function useAppSettings() {
+export function useAppSettings(enabled = true) {
   return useQuery({
     queryKey: ["appSettings"],
+    enabled,
     queryFn: async () => {
       try {
         const docRef = doc(db, SETTINGS_COLLECTION, SETTINGS_DOC);

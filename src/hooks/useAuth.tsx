@@ -208,18 +208,16 @@ export function AuthProvider({
   const [appUser, setAppUser] =
     useState<AppUser | null>(null);
 
-  const [loading, setLoading] = useState(
-    () => Boolean(auth),
-  );
+  // Start loading on server and client alike so the first render matches (auth is null in SSR).
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     /*
-     * auth is initialized by firebase.ts.
-     *
-     * If it is unavailable, the initial loading state
-     * is already false, so we don't call setState here.
+     * auth is initialized by firebase.ts (client only).
      */
     if (!auth) {
+      // Firebase isn't configured: nothing to wait for. Deferred to keep the effect render-safe.
+      void Promise.resolve().then(() => setLoading(false));
       return;
     }
 

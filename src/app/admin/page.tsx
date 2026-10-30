@@ -10,7 +10,7 @@ import { useAdminUpdateTradeEntryPrice, useAllTrades } from "@/hooks/useTrading"
 import { closeTrade } from "@/services/tradingService";
 import { useActivityLogs, useAnalytics, useUsers } from "@/hooks/useAdmin";
 import { useMarketData } from "@/hooks/useMarketData";
-import { formatCurrency } from "@/utils/format";
+import { formatCurrency, formatPrice } from "@/utils/format";
 
 export default function AdminPage() {
   const { appUser } = useAuth();
@@ -177,7 +177,7 @@ export default function AdminPage() {
                   </span>
                   <div className="w-full rounded-md border border-zinc-700/80 bg-zinc-900/40 p-2 sm:w-auto">
                     <p className="mb-2 text-[11px] text-zinc-400">
-                      Current Entry Price: {formatCurrency(trade.entryPrice)}
+                      Current Entry Price: {formatPrice(trade.entryPrice)}
                     </p>
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <input
