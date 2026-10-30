@@ -275,6 +275,17 @@ service cloud.firestore {
 
 
     // ─────────────────────────────────────────────
+    // APP SETTINGS (QR code, maintenance mode)
+    // ─────────────────────────────────────────────
+
+    match /config/{docId} {
+
+      allow read: if isAuth();
+      allow write: if isStaff();
+    }
+
+
+    // ─────────────────────────────────────────────
     // BANK ACCOUNTS
     // ─────────────────────────────────────────────
 
