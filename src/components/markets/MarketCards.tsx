@@ -273,8 +273,9 @@ export function MarketCards({ snapshot }: { snapshot: MarketSnapshot }) {
       })}
 
       {draftOrder ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4">
-          <div className="glass w-full max-w-xl space-y-3 rounded-2xl p-4">
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/80 sm:items-center sm:p-4">
+          {/* Solid panel that scrolls on its own: on phones the form is taller than the screen and the page must not show through. */}
+          <div className="max-h-[92dvh] w-full max-w-xl space-y-3 overflow-y-auto overscroll-contain rounded-t-2xl border border-zinc-800 bg-zinc-950 p-4 sm:rounded-2xl">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-semibold">
                 {draftOrder.side === "buy" ? "BUY" : "SELL"} {draftOrder.symbol}
